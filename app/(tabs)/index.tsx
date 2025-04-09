@@ -4,7 +4,6 @@ import { LoginLayout } from '../../components/LoginLayout';
 import { useRouter } from 'expo-router';
 
 
-
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
