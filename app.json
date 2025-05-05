@@ -1,5 +1,6 @@
 {
   "expo": {
+<<<<<<< HEAD
     "name": "Carrow",
     "slug": "Carrow",
     "version": "1.0.0",
@@ -12,17 +13,52 @@
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
+=======
+    "name": "DriveWise",
+    "slug": "DriveWise",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "myapp",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+>>>>>>> 4ed01ed0839700309e67e21ab8207499886d9a71
     "ios": {
       "supportsTablet": true
     },
     "android": {
       "adaptiveIcon": {
+<<<<<<< HEAD
         "foregroundImage": "./assets/adaptive-icon.png",
+=======
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+>>>>>>> 4ed01ed0839700309e67e21ab8207499886d9a71
         "backgroundColor": "#ffffff"
       }
     },
     "web": {
+<<<<<<< HEAD
       "favicon": "./assets/favicon.png"
+=======
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/images/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#ffffff"
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+>>>>>>> 4ed01ed0839700309e67e21ab8207499886d9a71
     }
   }
 }
