@@ -1,0 +1,4 @@
+mongodb
+link de acesso pela extensão VS Code: mongodb+srv://drivewise:<db_password>@drivewise0.yojute7.mongodb.net/
+usuário: drivewise
+senha: 12345
