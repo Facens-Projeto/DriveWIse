@@ -55,7 +55,13 @@ export default function DadosComunitariosScreen() {
         }
         setUserEff({ gasoline: effGas, alcohol: effAlc });
 
-        const allStats = (community as CommunityStat[]).filter(
+        const allStats: CommunityStat[] = (community as any[]).map(item => ({
+          modelId: item.veiculo.modelo,
+          year: item.veiculo.ano,
+          city: item.condutor.cidade,
+          count: item.count,
+          avgEfficiency: item.avgEfficiency,
+        })).filter(
           s => s.modelId === vehicle.modelId && s.year === vehicle.year
         );
         const micro = allStats.find(s => s.city === vehicle.city);

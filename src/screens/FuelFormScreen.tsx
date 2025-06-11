@@ -160,6 +160,8 @@ const FuelFormScreen = () => {
           variacaoTexto,
           variacaoValor,
           melhorou,
+          preco: anterior.preco,
+          km: anterior.km,
         };
       }
 

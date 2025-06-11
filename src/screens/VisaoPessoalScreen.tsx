@@ -59,7 +59,7 @@ const VisaoPessoalScreen = () => {
         }
 
         if (lista) {
-          const dados = JSON.parse(lista).sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime());
+          const dados = JSON.parse(lista).sort((a: any, b: any) => new Date(b.data).getTime() - new Date(a.data).getTime());
           setAbastecimentos(dados);
 
           if (dados.length > 0) {
@@ -137,7 +137,7 @@ const VisaoPessoalScreen = () => {
             let ultimaData = new Date(dados[0].data);
             let kmTotalRodado = dados[0].km - dados[dados.length - 1].km;
 
-            dados.forEach((item) => {
+            dados.forEach((item: any) => {
               tiposContagem[item.tipo] = (tiposContagem[item.tipo] || 0) + 1;
               tiposGasto[item.tipo] = (tiposGasto[item.tipo] || 0) + item.total;
               totalGastoGeral += item.total;
