@@ -73,7 +73,7 @@ const FuelFormScreen = () => {
   
         if (cadastro) {
           const { veiculo } = JSON.parse(cadastro);
-          console.log('Combustíveis carregados:', veiculo.combustiveis); 
+          console.log('Combustíveis carregados:', veiculo.combustiveisAceitos); 
           setCombustiveisDisponiveis(veiculo.combustiveisAceitos || []);
             if (veiculo.combustiveisAceitos.length === 1) {
               setFuelType(veiculo.combustiveisAceitos[0]); 
@@ -193,22 +193,26 @@ const FuelFormScreen = () => {
 
         {/* Seleção do tipo de combustível */}
 
-        {combustiveisDisponiveis.length > 1 && (
-        <View>
-          <Text style={styles.label}>Tipo de Combustível</Text>
-          <View style={styles.radioGroup}>
-            {combustiveisDisponiveis.map((tipo) => (
-              <TouchableOpacity
-                key={tipo}
-                style={[styles.radioButton, fuelType === tipo && styles.radioButtonSelected]}
-                onPress={() => setFuelType(tipo)}
-              >
-                <Text style={styles.radioText}>{tipo}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-      )}
+<View style={{ marginBottom: 16 }}>
+  <Text style={styles.label}>Tipo de Combustível</Text>
+  {combustiveisDisponiveis.length > 1 ? (
+    <View style={styles.radioGroup}>
+      {combustiveisDisponiveis.map((tipo) => (
+        <TouchableOpacity
+          key={tipo}
+          style={[styles.radioButton, fuelType === tipo && styles.radioButtonSelected]}
+          onPress={() => setFuelType(tipo)}
+        >
+          <Text style={styles.radioText}>{tipo}</Text>
+        </TouchableOpacity>
+      ))}
+    </View>
+  ) : (
+    <Text style={[styles.radioText, { marginLeft: 12 }]}>
+      {fuelType || 'Não informado'}
+    </Text>
+  )}
+</View>
 
 
         {/* Campo: Preço por litro */}

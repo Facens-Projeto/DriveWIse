@@ -22,27 +22,26 @@ import { v4 as uuidv4 } from 'uuid';
 import { Expense } from '../models/Expense';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-
 const EXPENSES_KEY = '@drivewise:expenses';
-
 
 export default function FinanceiroScreen() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Estados do modal de lançamento manual
   const [modalVisible, setModalVisible] = useState(false);
   const [manTitle, setManTitle] = useState('');
   const [manValue, setManValue] = useState('');
   const [manDate, setManDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
 
-  // Carrega despesas do AsyncStorage
   useEffect(() => {
     (async () => {
       try {
         const json = await AsyncStorage.getItem(EXPENSES_KEY);
-        const saved: Expense[] = json ? JSON.parse(json) : [];
+        const parsed = json ? JSON.parse(json) : [];
+        const saved: Expense[] = parsed.map((e: any) =>
+          new Expense(e.id, e.date, e.title, e.value, e.type)
+        );
         setExpenses(saved);
       } catch (e) {
         console.error('Erro lendo despesas:', e);
@@ -52,129 +51,116 @@ export default function FinanceiroScreen() {
     })();
   }, []);
 
+  useEffect(() => {
+    if (!loading) {
+      (async () => {
+        try {
+          const raw = expenses.map(e => e.toJSON());
+          await AsyncStorage.setItem(EXPENSES_KEY, JSON.stringify(raw));
+        } catch (e) {
+          console.error('Erro salvando despesas:', e);
+        }
+      })();
+    }
+  }, [expenses, loading]);
 
-useEffect(() => {
-  if (!loading) {
-    (async () => {
-      try {
-        // serializa com toJSON() para garantir consistência
-        const raw = expenses.map(e => e.toJSON());
-        await AsyncStorage.setItem(EXPENSES_KEY, JSON.stringify(raw));
-      } catch (e) {
-        console.error('Erro salvando despesas:', e);
-      }
-    })();
-  }
-}, [expenses, loading]);
+  const sumSince = (since: Date): number =>
+    expenses
+      .filter(e => new Date(e.date) >= since)
+      .reduce((acc, e) => acc + e.value, 0);
 
-// Funções para cálculo de totais
-const sumSince = (since: Date): number =>
-  expenses
-    .filter(e => new Date(e.date) >= since)
-    .reduce((acc, e) => acc + e.value, 0);
+  const now = new Date();
+  const total     = sumSince(new Date(0));
+  const lastWeek  = sumSince(new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000));
+  const lastMonth = sumSince(new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000));
+  const sinceYear = sumSince(new Date(now.getFullYear(), 0, 1));
 
-const now = new Date();
-const total     = sumSince(new Date(0));
-const lastWeek  = sumSince(new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000));
-const lastMonth = sumSince(new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000));
-const sinceYear = sumSince(new Date(now.getFullYear(), 0, 1));
+  const fmt = (v: number): string =>
+    v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-// Formata em R$
-const fmt = (v: number): string =>
-  v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  const openModal = () => {
+    setManTitle('');
+    setManValue('');
+    setManDate(new Date());
+    setModalVisible(true);
+  };
 
-// Handling modal
-const openModal = () => {
-  setManTitle('');
-  setManValue('');
-  setManDate(new Date());
-  setModalVisible(true);
-};
+  const saveManual = () => {
+    if (!manTitle.trim() || !manValue.trim() || isNaN(Number(manValue))) {
+      Alert.alert('Erro', 'Preencha título e valor válidos.');
+      return;
+    }
 
-const saveManual = () => {
-  if (!manTitle.trim() || !manValue.trim() || isNaN(Number(manValue))) {
-    Alert.alert('Erro', 'Preencha título e valor válidos.');
-    return;
-  }
+    const novo = new Expense(
+      uuidv4(),
+      manDate.toISOString(),
+      manTitle.trim(),
+      parseFloat(manValue),
+      'manual'
+    );
 
-  // cria instância de Expense
-  const novo = new Expense(
-    uuidv4(),
-    manDate.toISOString(),
-    manTitle.trim(),
-    parseFloat(manValue),
-    'manual'
-  );
+    setExpenses(prev => [novo, ...prev]);
+    setModalVisible(false);
+  };
 
-  setExpenses(prev => [novo, ...prev]);
-  setModalVisible(false);
-};
+  const renderItem = ({ item }: { item: Expense }) => {
+    const dateStr = new Date(item.date).toLocaleDateString('pt-BR');
+    const title   = item.type === 'manual' ? item.title : 'Abastecimento';
 
-// Render item histórico
-const renderItem = ({ item }: { item: Expense }) => {
-  const dateStr = new Date(item.date).toLocaleDateString('pt-BR');
-  const title   = item.type === 'manual' ? item.title : 'Abastecimento';
-
-  return (
-    <View style={styles.item}>
-      <Text style={styles.itemDate}>{dateStr}</Text>
-      <Text style={styles.itemTitle}>{title}</Text>
-      <Text style={styles.itemValue}>{fmt(item.value)}</Text>
-    </View>
-  );
-};
+    return (
+      <View style={styles.item}>
+        <Text style={styles.itemDate}>{dateStr}</Text>
+        <Text style={styles.itemTitle}>{title}</Text>
+        <Text style={styles.itemValue}>{fmt(item.value)}</Text>
+      </View>
+    );
+  };
 
   if (loading) return null;
 
   return (
     <View style={{ flex: 1, backgroundColor: '#121212' }}>
-        <SafeAreaView style={styles.container}>
-
-        
-      {/* Cards de totais */}
+      <SafeAreaView style={styles.container}>
         <View style={styles.topBanner}>
-        <Text style={styles.bannerText}>💲 Painel Financeiro</Text>
-        <Image source={require('../assets/img1.png')} style={styles.bannerLogo} resizeMode="contain" />
+          <Text style={styles.bannerText}>💲 Painel Financeiro</Text>
+          <Image source={require('../assets/img1.png')} style={styles.bannerLogo} resizeMode="contain" />
         </View>
-      
-      <View style={styles.cardsRow}>
-        <View style={styles.card}>
-          <Text style={styles.cardLabel}>Últ. Semana</Text>
-          <Text style={styles.cardValue}>{fmt(lastWeek)}</Text>
-        </View>
-        <View style={styles.card}>
-          <Text style={styles.cardLabel}>Últ. Mês</Text>
-          <Text style={styles.cardValue}>{fmt(lastMonth)}</Text>
-        </View>
-      </View>
-      <View style={styles.cardsRow}>
-        <View style={styles.card}>
-          <Text style={styles.cardLabel}>Desde Início do Ano</Text>
-          <Text style={styles.cardValue}>{fmt(sinceYear)}</Text>
-        </View>
-        <View style={styles.card}>
-          <Text style={styles.cardLabel}>Total</Text>
-          <Text style={styles.cardValue}>{fmt(total)}</Text>
-        </View>
-      </View>
-      
 
-      {/* Botão de adicionar manual */}
-      <TouchableOpacity style={styles.addButton} onPress={openModal}>
-        <Text style={styles.addButtonText}>+ Lançamento Manual</Text>
-      </TouchableOpacity>
+        <View style={styles.cardsRow}>
+          <View style={styles.card}>
+            <Text style={styles.cardLabel}>Últ. Semana</Text>
+            <Text style={styles.cardValue}>{fmt(lastWeek)}</Text>
+          </View>
+          <View style={styles.card}>
+            <Text style={styles.cardLabel}>Últ. Mês</Text>
+            <Text style={styles.cardValue}>{fmt(lastMonth)}</Text>
+          </View>
+        </View>
 
-      {/* Histórico */}
-      <Text style={styles.historyTitle}>Histórico de Despesas</Text>
-      <FlatList
-        data={expenses.sort((a, b) => (a.date < b.date ? 1 : -1))}
-        keyExtractor={item => item.id}
-        renderItem={renderItem}
-        contentContainerStyle={styles.list}
-      />
+        <View style={styles.cardsRow}>
+          <View style={styles.card}>
+            <Text style={styles.cardLabel}>Desde Início do Ano</Text>
+            <Text style={styles.cardValue}>{fmt(sinceYear)}</Text>
+          </View>
+          <View style={styles.card}>
+            <Text style={styles.cardLabel}>Total</Text>
+            <Text style={styles.cardValue}>{fmt(total)}</Text>
+          </View>
+        </View>
+
+        <TouchableOpacity style={styles.addButton} onPress={openModal}>
+          <Text style={styles.addButtonText}>+ Lançamento Manual</Text>
+        </TouchableOpacity>
+
+        <Text style={styles.historyTitle}>Histórico de Despesas</Text>
+        <FlatList
+          data={expenses.sort((a, b) => (a.date < b.date ? 1 : -1))}
+          keyExtractor={item => item.id}
+          renderItem={renderItem}
+          contentContainerStyle={styles.list}
+        />
       </SafeAreaView>
 
-      {/* Modal de lançamento manual */}
       <Modal visible={modalVisible} animationType="slide" transparent>
         <KeyboardAvoidingView
           style={styles.modalOverlay}
@@ -182,7 +168,6 @@ const renderItem = ({ item }: { item: Expense }) => {
         >
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Novo Gasto Manual</Text>
-
             <TextInput
               style={styles.modalInput}
               placeholder="Título"
@@ -190,14 +175,11 @@ const renderItem = ({ item }: { item: Expense }) => {
               value={manTitle}
               onChangeText={setManTitle}
             />
-
             <TouchableOpacity
               onPress={() => setShowDatePicker(true)}
               style={styles.datePickerButton}
             >
-              <Text style={styles.datePickerText}>
-                {manDate.toLocaleDateString('pt-BR')}
-              </Text>
+              <Text style={styles.datePickerText}>{manDate.toLocaleDateString('pt-BR')}</Text>
             </TouchableOpacity>
             {showDatePicker && (
               <DateTimePicker
@@ -210,7 +192,6 @@ const renderItem = ({ item }: { item: Expense }) => {
                 }}
               />
             )}
-
             <TextInput
               style={styles.modalInput}
               placeholder="Valor (R$)"
@@ -219,8 +200,6 @@ const renderItem = ({ item }: { item: Expense }) => {
               value={manValue}
               onChangeText={setManValue}
             />
-            
-
             <View style={styles.modalButtons}>
               <TouchableOpacity onPress={() => setModalVisible(false)}>
                 <Text style={styles.modalCancel}>Cancelar</Text>
@@ -239,88 +218,52 @@ const renderItem = ({ item }: { item: Expense }) => {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#121212', padding: 16, paddingTop: -10 },
   cardsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 12,
+    flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12,
   },
   card: {
-    flex: 1,
-    backgroundColor: '#1e1e1e',
-    padding: 12,
-    marginHorizontal: 4,
-    borderRadius: 8,
+    flex: 1, backgroundColor: '#1e1e1e', padding: 12, marginHorizontal: 4, borderRadius: 8,
   },
   cardLabel: { color: '#FFFFFF', fontSize: 14 },
   cardValue: { color: '#FFFFFF', fontSize: 18, fontWeight: 'bold', marginTop: 4 },
   addButton: {
-    backgroundColor: '#7e54f6',
-    padding: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginVertical: 12,
+    backgroundColor: '#7e54f6', padding: 12, borderRadius: 8, alignItems: 'center', marginVertical: 12,
   },
   addButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: 'bold' },
   historyTitle: { color: '#FFFFFF', fontSize: 18, marginBottom: 8 },
   list: { paddingBottom: 80 },
   item: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    backgroundColor: '#1e1e1e',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 8,
+    flexDirection: 'row', justifyContent: 'space-between', backgroundColor: '#1e1e1e',
+    padding: 12, borderRadius: 8, marginBottom: 8,
   },
   itemDate: { color: '#CCCCCC', flex: 1 },
   itemTitle: { color: '#FFFFFF', flex: 2, textAlign: 'center' },
   itemValue: { color: '#FFFFFF', flex: 1, textAlign: 'right' },
-  // Modal
   modalOverlay: {
-    flex: 1,
-    justifyContent: 'center',
-    backgroundColor: '#00000088',
-    padding: 16,
+    flex: 1, justifyContent: 'center', backgroundColor: '#00000088', padding: 16,
   },
   modalContent: {
-    backgroundColor: '#1e1e1e',
-    borderRadius: 8,
-    padding: 16,
+    backgroundColor: '#1e1e1e', borderRadius: 8, padding: 16,
   },
   modalTitle: { color: '#FFFFFF', fontSize: 20, marginBottom: 12 },
   modalInput: {
-    backgroundColor: '#121212',
-    color: '#FFFFFF',
-    borderRadius: 6,
-    padding: 10,
-    marginBottom: 12,
+    backgroundColor: '#121212', color: '#FFFFFF', borderRadius: 6, padding: 10, marginBottom: 12,
   },
   datePickerButton: {
-    backgroundColor: '#121212',
-    padding: 10,
-    borderRadius: 6,
-    marginBottom: 12,
+    backgroundColor: '#121212', padding: 10, borderRadius: 6, marginBottom: 12,
   },
-    topBanner: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: '#7e54f6',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 24,
+  topBanner: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    backgroundColor: '#7e54f6', borderRadius: 12, padding: 16, marginBottom: 24,
   },
   bannerText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
-    flex: 1,
+    color: '#fff', fontSize: 18, fontWeight: 'bold', flex: 1,
   },
   bannerLogo: {
-    width: 50,
-    height: 50,
-    marginLeft: 12,
+    width: 50, height: 50, marginLeft: 12,
   },
   datePickerText: { color: '#FFFFFF' },
   modalButtons: { flexDirection: 'row', justifyContent: 'space-between' },
   modalCancel: { color: '#DD5555', fontSize: 16 },
   modalSave: { color: '#55DD55', fontSize: 16 },
 });
+
