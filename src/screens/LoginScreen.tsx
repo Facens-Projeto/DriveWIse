@@ -15,6 +15,7 @@ import {
   Alert
 } from 'react-native';
 import { signIn, signUp } from '../services/firebase';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../App';
@@ -36,7 +37,13 @@ export default function LoginScreen() {
       } else {
         await signUp(email, password);
       }
-      navigation.replace('Main');
+      // após autenticar, verifica perfil JSON de veiculo/condutor
+      const rawProfile = await AsyncStorage.getItem('@cadastro_usuario');
+      if (!rawProfile) {
+        navigation.replace('Cadastro');
+      } else {
+        navigation.replace('Main');
+      }
     } catch (err: any) {
       Alert.alert('Falha', err.message);
     } finally {
@@ -51,15 +58,14 @@ export default function LoginScreen() {
           style={styles.inner}
           behavior={Platform.select({ ios: 'padding', android: undefined })}
         >
-          {/* Header fixo no topo */}
           <View style={styles.header}>
-              <Image
-                source={require('../assets/img1.png')}
-                style={styles.logo}
-                resizeMode="contain"
-              />
-              <Text style={styles.title}>Bem Vindo</Text>
-            </View>
+            <Image
+              source={require('../assets/img1.png')}
+              style={styles.logo}
+              resizeMode="contain"
+            />
+            <Text style={styles.title}>Bem Vindo</Text>
+          </View>
           <View style={styles.form}>
             <TextInput
               style={styles.input}
@@ -107,11 +113,7 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#121212',
-  },
-  
+  container: { flex: 1, backgroundColor: '#121212' },
   header: {
     width: '100%',
     backgroundColor: '#7e54f6',
@@ -121,24 +123,10 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 20,
     marginBottom: 30,
   },
-    inner: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  logo: {
-    width: 120,
-    height: 120,
-    marginBottom: 10,
-  },
-  title: {
-    fontSize: 24,
-    color: '#fff',
-    fontWeight: 'bold',
-  },
-  form: {
-    width: '80%',
-    alignItems: 'center',
-  },
+  inner: { flex: 1, alignItems: 'center' },
+  logo: { width: 120, height: 120, marginBottom: 10 },
+  title: { fontSize: 24, color: '#fff', fontWeight: 'bold' },
+  form: { width: '80%', alignItems: 'center' },
   input: {
     width: '100%',
     backgroundColor: '#1e1e1e',
@@ -151,7 +139,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#333',
   },
-  
   button: {
     width: '100%',
     backgroundColor: '#7e54f6',
@@ -160,17 +147,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 5,
   },
-  buttonText: {
-    color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 16,
-  },
-  switchMode: {
-    marginTop: 20,
-    alignItems: 'center',
-  },
-  switchText: {
-    color: '#aaa',
-    fontSize: 14,
-  },
+  buttonText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
+  switchMode: { marginTop: 20, alignItems: 'center' },
+  switchText: { color: '#aaa', fontSize: 14 },
 });

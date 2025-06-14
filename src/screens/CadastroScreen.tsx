@@ -1,10 +1,25 @@
+// src/screens/CadastroScreen.tsx
 import React, { useState } from 'react';
-import { StatusBar, KeyboardAvoidingView, Platform, View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert, Image } from 'react-native';
+import {
+  SafeAreaView,
+  ScrollView,
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  Alert,
+  Image,
+  KeyboardAvoidingView,
+  Platform,
+  StatusBar,
+} from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Veiculo } from '../models/Veiculo';
 import { Condutor } from '../models/Condutor';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useNavigation } from '@react-navigation/native';
+import { RootStackParamList } from '../../App';
 
 const COMBUSTIVEIS = ['Gasolina', 'Álcool', 'Diesel'];
 const MARCAS: Record<string, string[]> = {
@@ -16,11 +31,11 @@ const MARCAS: Record<string, string[]> = {
   Renault: ['Kwid', 'Duster', 'Logan', 'Sandero'],
 };
 
-type RootStackParamList = { Abastecimento: undefined };
-type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'Abastecimento'>;
+type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'Cadastro'>;
 
 export default function CadastroScreen() {
   const navigation = useNavigation<NavigationProp>();
+
   const [marca, setMarca] = useState('');
   const [modelo, setModelo] = useState('');
   const [ano, setAno] = useState('');
@@ -34,37 +49,67 @@ export default function CadastroScreen() {
   const [cidade, setCidade] = useState('');
 
   const toggleCombustivel = (tipo: string) => {
-    setCombustiveis(prev => prev.includes(tipo) ? prev.filter(c => c !== tipo) : [...prev, tipo]);
+    setCombustiveis(prev =>
+      prev.includes(tipo) ? prev.filter(c => c !== tipo) : [...prev, tipo]
+    );
   };
 
-  const formatarKM = (valor: string) => valor.replace(/\D/g, '').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  const formatarKM = (valor: string) =>
+    valor.replace(/\D/g, '').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+
+  const limpar = () => {
+    setMarca('');
+    setModelo('');
+    setAno('');
+    setKmAtual('');
+    setModificacoes('');
+    setCombustiveis([]);
+    setEstilo('');
+    setRuas('');
+    setFrequencia('');
+    setEstado('');
+    setCidade('');
+  };
 
   const salvarCadastro = async () => {
     try {
-      if (!marca || !modelo || !ano || !kmAtual || combustiveis.length === 0 || !estilo || !ruas || !frequencia || !estado || !cidade) {
+      if (
+        !marca || !modelo || !ano || !kmAtual ||
+        combustiveis.length === 0 || !estilo || !ruas || !frequencia || !estado || !cidade
+      ) {
         Alert.alert('Preencha todos os campos obrigatórios!');
         return;
       }
-      const veiculo = new Veiculo(marca, modelo, parseInt(ano), parseInt(kmAtual.replace(/\./g, '')), combustiveis, modificacoes);
+      const veiculo = new Veiculo(
+        marca,
+        modelo,
+        parseInt(ano, 10),
+        parseInt(kmAtual.replace(/\./g, ''), 10),
+        combustiveis,
+        modificacoes
+      );
       const condutor = new Condutor(estilo, ruas, frequencia, estado, cidade);
 
       const cadastroCompleto = { veiculo: veiculo.toJSON(), condutor: condutor.toJSON() };
-      const cadastroResumido = { brand: marca, modelId: modelo, city: cidade };
+      const cadastroResumido = {
+        marca,
+        modelo,
+        ano: parseInt(ano, 10),
+        quilometragem: parseInt(kmAtual.replace(/\./g, ''), 10),
+        combustiveis,
+      };
 
       await AsyncStorage.setItem('@cadastro_usuario', JSON.stringify(cadastroCompleto));
       await AsyncStorage.setItem('@drivewise:vehicle', JSON.stringify(cadastroResumido));
+      await AsyncStorage.setItem('@drivewise:driverProfile', JSON.stringify(condutor.toJSON()));
 
-      Alert.alert('Cadastro salvo com sucesso!');
+      navigation.replace('Main');
+      Alert.alert('Sucesso', 'Cadastro salvo e perfil configurado!');
       limpar();
     } catch (e) {
       console.error('Erro ao salvar cadastro:', e);
       Alert.alert('Erro ao salvar o cadastro. Verifique os dados.');
     }
-  };
-
-  const limpar = () => {
-    setMarca(''); setModelo(''); setAno(''); setKmAtual(''); setModificacoes('');
-    setCombustiveis([]); setEstilo(''); setRuas(''); setFrequencia(''); setEstado(''); setCidade('');
   };
 
   return (
@@ -143,8 +188,20 @@ export default function CadastroScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { padding: 16, paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight || 24 : 48, backgroundColor: '#121212' },
-  topBanner: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#7e54f6', borderRadius: 12, padding: 16, marginBottom: 24 },
+  container: {
+    padding: 16,
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight || 24 : 48,
+    backgroundColor: '#121212',
+  },
+  topBanner: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#7e54f6',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 24,
+  },
   bannerText: { color: '#fff', fontSize: 18, fontWeight: 'bold', flex: 1 },
   bannerLogo: { width: 50, height: 50, marginLeft: 12 },
   sectionTitle: { fontSize: 18, fontWeight: '600', marginTop: 20, marginBottom: 10, color: '#fff' },
