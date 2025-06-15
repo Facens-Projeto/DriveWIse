@@ -1,4 +1,5 @@
-mongodb
-link de acesso pela extensão VS Code: mongodb+srv://drivewise:<db_password>@drivewise0.yojute7.mongodb.net/
+Click on "View" and open "Command Palette."
+Search "MongoDB: Connect" on the Command Palette and click on "Connect with Connection String."
+link de acesso pela extensão VS Code: mongodb+srv://drivewise:12345@drivewise0.yojute7.mongodb.net/
 usuário: drivewise
 senha: 12345

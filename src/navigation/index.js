@@ -25,6 +25,7 @@ export default function AppRoutes() {
             if (route.name === 'Cadastro') iconName = focused ? 'person' : 'person-outline';
             else if (route.name === 'Abastecimento') iconName = focused ? 'car' : 'car-outline';
             else if (route.name === 'Visão Pessoal') iconName = focused ? 'analytics' : 'analytics-outline';
+     
 
             return <Ionicons name={iconName} size={size} color={color} />;
           },
