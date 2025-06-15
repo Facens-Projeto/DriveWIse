@@ -39,6 +39,9 @@ app.post('/veiculo', async (req, res) => {
     res.status(500).json({ erro: 'Erro ao salvar veiculo' });
   }
 });
+app.get('/', (req, res) => {
+  res.send('API DriveWise está online 🚀');
+});
 
 const PORT = process.env.PORT;
 app.listen(PORT, () => {
