@@ -1,5 +1,5 @@
-// const BASE_URL = 'https://drivewise-production.up.railway.app';
-const BASE_URL = 'http://192.168.0.X:8080'; // seu IP local
+const BASE_URL = 'https://drivewise-production.up.railway.app';
+
 // Salva novo veículo
 export async function cadastrarVeiculoMongo(veiculo: any) {
     console.log('Enviando para a API:', JSON.stringify(veiculo, null, 2)); // 👈
