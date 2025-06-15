@@ -5,10 +5,12 @@
   "scripts": {
     "start": "node api.js"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "description": "",
+  "author": "Seu Nome",
+  "description": "API do backend do DriveWise",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
   "dependencies": {
     "cors": "^2.8.5",
     "dotenv": "^16.5.0",
