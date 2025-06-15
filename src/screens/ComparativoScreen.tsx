@@ -7,16 +7,10 @@ import {
   Modal,
   TextInput,
   StyleSheet,
-  Alert,
   ScrollView,
+  Alert,
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { MongoClient } from 'mongodb';
-
-const uri = 'mongodb+srv://drivewise:12345@drivewise0.yojute7.mongodb.net/';
-const client = new MongoClient(uri);
-const DB_NAME = 'drivewise';
-const COLLECTION_NAME = 'veiculos';
+import { buscarTodosVeiculos } from '../services/veiculosService';
 
 interface RawEntry {
   veiculo: {
@@ -49,7 +43,6 @@ interface StatsResult {
   custoPorKm: number;
 }
 
-const STORAGE_KEY = '@drivewise:comparativo';
 const COMB_OPTIONS = ['Gasolina', 'Álcool', 'Diesel'];
 const KM_RANGES = [
   { label: '0-15000', min: 0, max: 15000 },
@@ -59,9 +52,10 @@ const KM_RANGES = [
 
 export default function ComparativoScreen() {
   const [filters, setFilters] = useState<VehicleFilter[]>([]);
-  const [data, setData] = useState<RawEntry[]>([]);
   const [stats, setStats] = useState<Record<string, StatsResult>>({});
   const [modalVisible, setModalVisible] = useState(false);
+  const [data, setData] = useState<RawEntry[]>([]);
+
   const [marca, setMarca] = useState('');
   const [modelo, setModelo] = useState('');
   const [ano, setAno] = useState('');
@@ -71,23 +65,11 @@ export default function ComparativoScreen() {
   useEffect(() => {
     (async () => {
       try {
-        const raw = await AsyncStorage.getItem(STORAGE_KEY);
-        if (raw) {
-          const arr: VehicleFilter[] = JSON.parse(raw);
-          setFilters(arr);
-        }
-        await client.connect();
-        const collection = client.db(DB_NAME).collection(COLLECTION_NAME);
-        const result = await collection.find({}).toArray();
-        // Map MongoDB documents to RawEntry structure
-        const mapped: RawEntry[] = result.map((doc: any) => ({
-          veiculo: doc.veiculo,
-          condutor: doc.condutor,
-          avgEfficiency: doc.avgEfficiency,
-        }));
-        setData(mapped);
-      } catch (err) {
-        console.error('Erro ao carregar dados do MongoDB:', err);
+        const veiculosOnline = await buscarTodosVeiculos();
+        setData(veiculosOnline);
+      } catch (e) {
+        console.error('Erro ao buscar dados do MongoDB:', e);
+        Alert.alert('Erro ao buscar dados', 'Não foi possível carregar os veículos comunitários.');
       }
     })();
   }, []);
@@ -98,7 +80,6 @@ export default function ComparativoScreen() {
       results[f.id] = computeStatsForFilter(f);
     });
     setStats(results);
-    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(filters));
   }, [filters, data]);
 
   function computeStatsForFilter(f: VehicleFilter): StatsResult {
@@ -109,6 +90,7 @@ export default function ComparativoScreen() {
     const lvl2 = lvl1.filter(
       e => e.veiculo.quilometragem >= f.kmMin && e.veiculo.quilometragem <= f.kmMax
     );
+
     const base = lvl2.length ? lvl2 : lvl1.length ? lvl1 : lvl0;
 
     const sum = base.reduce(
@@ -121,7 +103,11 @@ export default function ComparativoScreen() {
       { gasolina: 0, alcool: 0, diesel: 0 }
     );
     const cnt = base.length || 1;
-    const avg = { gasolina: sum.gasolina / cnt, alcool: sum.alcool / cnt, diesel: sum.diesel / cnt };
+    const avg = {
+      gasolina: sum.gasolina / cnt,
+      alcool: sum.alcool / cnt,
+      diesel: sum.diesel / cnt,
+    };
 
     const custo = ((avg.gasolina ? 5 / avg.gasolina : 0) + (avg.alcool ? 4 / avg.alcool : 0) + (avg.diesel ? 4.5 / avg.diesel : 0)) / 3;
 
@@ -156,100 +142,91 @@ export default function ComparativoScreen() {
   }
 
   return (
-  <SafeAreaView style={styles.container}>
-    <TouchableOpacity style={styles.btnAdd} onPress={() => setModalVisible(true)}>
-      <Text style={styles.btnText}>➕ Adicionar Veículo</Text>
-    </TouchableOpacity>
+    <SafeAreaView style={styles.container}>
+      <TouchableOpacity style={styles.btnAdd} onPress={() => setModalVisible(true)}>
+        <Text style={styles.btnText}>➕ Adicionar Veículo</Text>
+      </TouchableOpacity>
 
-    <ScrollView style={styles.table}>
-      <View style={styles.rowHeader}>
-        <Text style={[styles.cell, styles.header]}>Veículo</Text>
-        <Text style={[styles.cell, styles.header]}>Gasolina</Text>
-        <Text style={[styles.cell, styles.header]}>Álcool</Text>
-        <Text style={[styles.cell, styles.header]}>Diesel</Text>
-        <Text style={[styles.cell, styles.header]}>Custo/km</Text>
-      </View>
-      {filters.map(f => {
-        const s = stats[f.id];
-        const allGas = Object.values(stats).map(r => r.avg.gasolina);
-        const bestGas = Math.max(...allGas);
-        const worstGas = Math.min(...allGas);
-        const allAlc = Object.values(stats).map(r => r.avg.alcool);
-        const bestAlc = Math.max(...allAlc);
-        const worstAlc = Math.min(...allAlc);
-        const allDiesel = Object.values(stats).map(r => r.avg.diesel);
-        const bestDiesel = Math.max(...allDiesel);
-        const worstDiesel = Math.min(...allDiesel);
-        const allCusto = Object.values(stats).map(r => r.custoPorKm);
-        const bestC = Math.min(...allCusto);
-        const worstC = Math.max(...allCusto);
-
-        return (
-          <View key={f.id} style={styles.row}>
-            <Text style={styles.cell}>{`${f.marca} ${f.modelo} ${f.ano}`}</Text>
-            <Text style={[styles.cell, s.avg.gasolina === bestGas ? styles.best : s.avg.gasolina === worstGas ? styles.worst : {}]}>
-              {s.avg.gasolina.toFixed(1)}
-            </Text>
-            <Text style={[styles.cell, s.avg.alcool === bestAlc ? styles.best : s.avg.alcool === worstAlc ? styles.worst : {}]}>
-              {s.avg.alcool.toFixed(1)}
-            </Text>
-            <Text style={[styles.cell, s.avg.diesel === bestDiesel ? styles.best : s.avg.diesel === worstDiesel ? styles.worst : {}]}>
-              {s.avg.diesel.toFixed(1)}
-            </Text>
-            <Text style={[styles.cell, s.custoPorKm === bestC ? styles.best : s.custoPorKm === worstC ? styles.worst : {}]}>
-              R$ {s.custoPorKm.toFixed(2)}
-            </Text>
-          </View>
-        );
-      })}
-    </ScrollView>
-
-    <Modal visible={modalVisible} transparent animationType="slide">
-      <View style={styles.overlay}>
-        <View style={styles.modal}>
-          <Text style={styles.modalTitle}>Novo Veículo</Text>
-          <TextInput style={styles.input} placeholder="Marca" placeholderTextColor="#999" value={marca} onChangeText={setMarca} />
-          <TextInput style={styles.input} placeholder="Modelo" placeholderTextColor="#999" value={modelo} onChangeText={setModelo} />
-          <TextInput style={styles.input} placeholder="Ano" keyboardType="numeric" placeholderTextColor="#999" value={ano} onChangeText={setAno} />
-          <Text style={styles.label}>Faixa de quilometragem</Text>
-          <View style={styles.pickerGroup}>
-            {KM_RANGES.map(r => (
-              <TouchableOpacity
-                key={r.label}
-                style={[styles.pickerOption, kmRange === r.label && styles.pickerSelected]}
-                onPress={() => setKmRange(r.label)}
-              >
-                <Text style={styles.pickerText}>{r.label}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-          <Text style={styles.label}>Combustíveis aceitos</Text>
-          <View style={styles.pickerGroup}>
-            {COMB_OPTIONS.map(c => (
-              <TouchableOpacity
-                key={c}
-                style={[styles.pickerOption, combSelecionados.includes(c) && styles.pickerSelected]}
-                onPress={() => {
-                  setCombSelecionados(prev => prev.includes(c) ? prev.filter(x => x !== c) : [...prev, c]);
-                }}
-              >
-                <Text style={styles.pickerText}>{c}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-          <TouchableOpacity style={styles.btnSave} onPress={addFilter}>
-            <Text style={styles.btnText}>Salvar</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.btnCancel} onPress={() => setModalVisible(false)}>
-            <Text style={styles.btnText}>Cancelar</Text>
-          </TouchableOpacity>
+      <ScrollView style={styles.table}>
+        <View style={styles.rowHeader}>
+          <Text style={[styles.cell, styles.header]}>Veículo</Text>
+          <Text style={[styles.cell, styles.header]}>Gasolina</Text>
+          <Text style={[styles.cell, styles.header]}>Álcool</Text>
+          <Text style={[styles.cell, styles.header]}>Diesel</Text>
+          <Text style={[styles.cell, styles.header]}>Custo/km</Text>
         </View>
-      </View>
-    </Modal>
-  </SafeAreaView>
+        {filters.map(f => {
+          const s = stats[f.id];
+          const allGas = Object.values(stats).map(r => r.avg.gasolina);
+          const bestGas = Math.max(...allGas);
+          const worstGas = Math.min(...allGas);
+          const allAlc = Object.values(stats).map(r => r.avg.alcool);
+          const bestAlc = Math.max(...allAlc);
+          const worstAlc = Math.min(...allAlc);
+          const allDiesel = Object.values(stats).map(r => r.avg.diesel);
+          const bestDiesel = Math.max(...allDiesel);
+          const worstDiesel = Math.min(...allDiesel);
+          const allCusto = Object.values(stats).map(r => r.custoPorKm);
+          const bestC = Math.min(...allCusto);
+          const worstC = Math.max(...allCusto);
+
+          return (
+            <View key={f.id} style={styles.row}>
+              <Text style={styles.cell}>{`${f.marca} ${f.modelo} ${f.ano}`}</Text>
+              <Text style={[styles.cell, s.avg.gasolina === bestGas ? styles.best : s.avg.gasolina === worstGas ? styles.worst : {}]}>{s.avg.gasolina.toFixed(1)}</Text>
+              <Text style={[styles.cell, s.avg.alcool === bestAlc ? styles.best : s.avg.alcool === worstAlc ? styles.worst : {}]}>{s.avg.alcool.toFixed(1)}</Text>
+              <Text style={[styles.cell, s.avg.diesel === bestDiesel ? styles.best : s.avg.diesel === worstDiesel ? styles.worst : {}]}>{s.avg.diesel.toFixed(1)}</Text>
+              <Text style={[styles.cell, s.custoPorKm === bestC ? styles.best : s.custoPorKm === worstC ? styles.worst : {}]}>R$ {s.custoPorKm.toFixed(2)}</Text>
+            </View>
+          );
+        })}
+      </ScrollView>
+
+      <Modal visible={modalVisible} transparent animationType="slide">
+        <View style={styles.overlay}>
+          <View style={styles.modal}>
+            <Text style={styles.modalTitle}>Novo Veículo</Text>
+            <TextInput style={styles.input} placeholder="Marca" placeholderTextColor="#999" value={marca} onChangeText={setMarca} />
+            <TextInput style={styles.input} placeholder="Modelo" placeholderTextColor="#999" value={modelo} onChangeText={setModelo} />
+            <TextInput style={styles.input} placeholder="Ano" keyboardType="numeric" placeholderTextColor="#999" value={ano} onChangeText={setAno} />
+            <Text style={styles.label}>Faixa de quilometragem</Text>
+            <View style={styles.pickerGroup}>
+              {KM_RANGES.map(r => (
+                <TouchableOpacity
+                  key={r.label}
+                  style={[styles.pickerOption, kmRange === r.label && styles.pickerSelected]}
+                  onPress={() => setKmRange(r.label)}
+                >
+                  <Text style={styles.pickerText}>{r.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <Text style={styles.label}>Combustíveis aceitos</Text>
+            <View style={styles.pickerGroup}>
+              {COMB_OPTIONS.map(c => (
+                <TouchableOpacity
+                  key={c}
+                  style={[styles.pickerOption, combSelecionados.includes(c) && styles.pickerSelected]}
+                  onPress={() => {
+                    setCombSelecionados(prev => prev.includes(c) ? prev.filter(x => x !== c) : [...prev, c]);
+                  }}
+                >
+                  <Text style={styles.pickerText}>{c}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <TouchableOpacity style={styles.btnSave} onPress={addFilter}>
+              <Text style={styles.btnText}>Salvar</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.btnCancel} onPress={() => setModalVisible(false)}>
+              <Text style={styles.btnText}>Cancelar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    </SafeAreaView>
   );
 }
-
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#121212', padding: 20 },

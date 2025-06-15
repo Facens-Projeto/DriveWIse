@@ -1,4 +1,6 @@
-import React, { useEffect, useState } from 'react';
+// FuelFormScreen.tsx — atualizado para funcionar 100% online
+
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -13,10 +15,14 @@ import {
   Alert,
   Modal,
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
-import { useCallback } from 'react';
-
+import { getUserId } from '../services/firebase';
+import {
+  cadastrarAbastecimento,
+  buscarAbastecimentosDoUsuario,
+  atualizarQuilometragem,
+  buscarVeiculosDoUsuario,
+} from '../services/veiculosService';
 
 const FuelFormScreen = () => {
   const [fuelType, setFuelType] = useState<string | null>(null);
@@ -24,38 +30,25 @@ const FuelFormScreen = () => {
     melhorou: boolean;
     valor: string;
   } | null>(null);
-  
+
   const [precoPorLitro, setPrecoPorLitro] = useState('');
   const [totalAbastecido, setTotalAbastecido] = useState('');
   const [litrosAbastecidos, setLitrosAbastecidos] = useState('');
   const [kmAtual, setKmAtual] = useState('');
   const [resultado, setResultado] = useState('');
   const [modalVisible, setModalVisible] = useState(false);
-  const [resumoData, setResumoData] = useState<{
-    tipo: string;
-    data: string;
-    litros: number;
-    total: number;
-    trajeto: number;
-    rendimento: number;
-    custoPorKm: number;
-    variacaoTexto: string;
-    variacaoValor: string | null;
-    melhorou: boolean | null;
-    preco: number;
-    km: number;
-  } | null>(null);
-  
+  const [resumoData, setResumoData] = useState<any>(null);
   const [combustiveisDisponiveis, setCombustiveisDisponiveis] = useState<string[]>([]);
+
   const calcularTerceiroCampo = () => {
     const preco = parseFloat(precoPorLitro.replace(',', '.'));
     const total = parseFloat(totalAbastecido.replace(',', '.'));
     const litros = parseFloat(litrosAbastecidos.replace(',', '.'));
-  
+
     const temPreco = !isNaN(preco);
     const temTotal = !isNaN(total);
     const temLitros = !isNaN(litros);
-  
+
     if (temPreco && temTotal && !temLitros) {
       setLitrosAbastecidos((total / preco).toFixed(2).replace('.', ','));
     } else if (temPreco && temLitros && !temTotal) {
@@ -64,26 +57,24 @@ const FuelFormScreen = () => {
       setPrecoPorLitro((total / litros).toFixed(2).replace('.', ','));
     }
   };
-  
+
   useFocusEffect(
     useCallback(() => {
       const carregarCombustiveis = async () => {
-        const cadastro = await AsyncStorage.getItem('@cadastro_usuario');
-        console.log('Cadastro encontrado:', cadastro);
-  
-        if (cadastro) {
-          const { veiculo } = JSON.parse(cadastro);
-          console.log('Combustíveis carregados:', veiculo.combustiveisAceitos); 
-          setCombustiveisDisponiveis(veiculo.combustiveisAceitos || []);
-            if (veiculo.combustiveisAceitos.length === 1) {
-              setFuelType(veiculo.combustiveisAceitos[0]); 
-            }
+        const uid = await getUserId();
+        if (!uid) return;
+        const veiculo = await buscarVeiculosDoUsuario(uid);
+        if (veiculo?.combustiveisAceitos) {
+          setCombustiveisDisponiveis(veiculo.combustiveisAceitos);
+          if (veiculo.combustiveisAceitos.length === 1) {
+            setFuelType(veiculo.combustiveisAceitos[0]);
+          }
         }
       };
       carregarCombustiveis();
     }, [])
   );
-  
+
   const camposCompletos = precoPorLitro && totalAbastecido && litrosAbastecidos && kmAtual && (fuelType || combustiveisDisponiveis.length === 1);
 
   const limpar = () => {
@@ -96,83 +87,72 @@ const FuelFormScreen = () => {
   };
 
   const salvar = async () => {
-      if (!fuelType || !precoPorLitro || !totalAbastecido || !litrosAbastecidos || !kmAtual) {
-        Alert.alert('Preencha todos os campos!');
-        return;
-      }
-  
-      const preco = parseFloat(precoPorLitro.replace(',', '.'));
-      const total = parseFloat(totalAbastecido.replace(',', '.'));
-      const litros = parseFloat(litrosAbastecidos.replace(',', '.'));
-      const km = parseInt(kmAtual.replace(/\./g, ''));
-      const data = new Date().toISOString();
+    if (!fuelType || !precoPorLitro || !totalAbastecido || !litrosAbastecidos || !kmAtual) {
+      Alert.alert('Preencha todos os campos!');
+      return;
+    }
 
-      const novo = { tipo: fuelType, preco, total, litros, km, data };
+    const uid = await getUserId();
+    if (!uid) {
+      Alert.alert('Erro ao obter usuário. Tente novamente.');
+      return;
+    }
+    const preco = parseFloat(precoPorLitro.replace(',', '.'));
+    const total = parseFloat(totalAbastecido.replace(',', '.'));
+    const litros = parseFloat(litrosAbastecidos.replace(',', '.'));
+    const km = parseInt(kmAtual.replace(/\./g, ''));
+    const data = new Date().toISOString();
 
-      // Buscar abastecimentos antigos
-      const armazenado = await AsyncStorage.getItem('@abastecimentos');
-      const lista: any[] = armazenado ? JSON.parse(armazenado) : [];
+    const novo = { uid, tipo: fuelType, preco, total, litros, km, data };
 
-      // Atualizar a quilometragem no cadastro
-      const cadastro = await AsyncStorage.getItem('@cadastro_usuario');
-      if (cadastro) {
-        const dados = JSON.parse(cadastro);
-        dados.veiculo.quilometragem = km;
-        await AsyncStorage.setItem('@cadastro_usuario', JSON.stringify(dados));
-      }
+    await cadastrarAbastecimento(uid, novo);
+    await atualizarQuilometragem(uid, km);
 
-      // Cálculo retroativo do abastecimento anterior do mesmo tipo
-      const anterioresMesmoTipo = lista
-        .filter((item) => item.tipo === fuelType)
-        .sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime());
+    const anterioresMesmoTipo = (await buscarAbastecimentosDoUsuario(uid))
+      .filter((a: any) => a.tipo === fuelType)
+      .sort((a: any, b: any) => new Date(b.data).getTime() - new Date(a.data).getTime());
 
-      let resumo = null;
+    let resumo = null;
+    if (anterioresMesmoTipo.length >= 1) {
+      const anterior = anterioresMesmoTipo[0];
+      const trajeto = km - anterior.km;
+      const rendimento = trajeto / anterior.litros;
+      const custoPorKm = anterior.total / trajeto;
 
-      if (anterioresMesmoTipo.length >= 1) {
-        const anterior = anterioresMesmoTipo[0];
-        const trajeto = km - anterior.km;
-        const rendimento = trajeto / anterior.litros;
-        const custoPorKm = anterior.total / trajeto;
+      let variacaoTexto = 'Não disponível';
+      let variacaoValor = null;
+      let melhorou = null;
 
-        let variacaoTexto = 'Não disponível';
-        let variacaoValor = null;
-        let melhorou = null;
-
-        if (anterioresMesmoTipo.length >= 2) {
-          const penultimo = anterioresMesmoTipo[1];
-          const trajetoPenultimo = anterior.km - penultimo.km;
-          const rendimentoPenultimo = trajetoPenultimo / penultimo.litros;
-
-          const variacao = ((rendimento - rendimentoPenultimo) / rendimentoPenultimo) * 100;
-          variacaoTexto = `${variacao > 0 ? '+' : ''}${variacao.toFixed(1)}%`;
-          variacaoValor = Math.abs(variacao).toFixed(1);
-          melhorou = variacao > 0;
-        }
-
-        resumo = {
-          tipo: anterior.tipo,
-          data: anterior.data,
-          litros: anterior.litros,
-          total: anterior.total,
-          trajeto,
-          rendimento,
-          custoPorKm,
-          variacaoTexto,
-          variacaoValor,
-          melhorou,
-          preco: anterior.preco,
-          km: anterior.km,
-        };
+      if (anterioresMesmoTipo.length >= 2) {
+        const penultimo = anterioresMesmoTipo[1];
+        const trajetoPenultimo = anterior.km - penultimo.km;
+        const rendimentoPenultimo = trajetoPenultimo / penultimo.litros;
+        const variacao = ((rendimento - rendimentoPenultimo) / rendimentoPenultimo) * 100;
+        variacaoTexto = `${variacao > 0 ? '+' : ''}${variacao.toFixed(1)}%`;
+        variacaoValor = Math.abs(variacao).toFixed(1);
+        melhorou = variacao > 0;
       }
 
-      // Salvar novo abastecimento
-      lista.push(novo);
-      await AsyncStorage.setItem('@abastecimentos', JSON.stringify(lista));
+      resumo = {
+        tipo: anterior.tipo,
+        data: anterior.data,
+        litros: anterior.litros,
+        total: anterior.total,
+        trajeto,
+        rendimento,
+        custoPorKm,
+        variacaoTexto,
+        variacaoValor,
+        melhorou,
+        preco: anterior.preco,
+        km: anterior.km,
+      };
+    }
 
-      setResumoData(resumo);
-      setModalVisible(true);
-      limpar();
-    };
+    setResumoData(resumo);
+    setModalVisible(true);
+    limpar();
+  };
 
   
   return (

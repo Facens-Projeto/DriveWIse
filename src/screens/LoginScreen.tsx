@@ -12,10 +12,10 @@ import {
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
-  Alert
+  Alert,
 } from 'react-native';
-import { signIn, signUp } from '../services/firebase';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { signIn, signUp, getUserId } from '../services/firebase';
+import { buscarVeiculosDoUsuario } from '../services/veiculosService';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../App';
@@ -25,7 +25,7 @@ export default function LoginScreen() {
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [mode, setMode] = useState<'login'|'signup'>('login');
+  const [mode, setMode] = useState<'login' | 'signup'>('login');
   const [loading, setLoading] = useState(false);
 
   const handleAuth = async () => {
@@ -37,15 +37,29 @@ export default function LoginScreen() {
       } else {
         await signUp(email, password);
       }
-      // após autenticar, verifica perfil JSON de veiculo/condutor
-      const rawProfile = await AsyncStorage.getItem('@cadastro_usuario');
-      if (!rawProfile) {
+
+      const uid = await getUserId();
+      if (!uid) {
+        Alert.alert('Erro', 'Não foi possível obter o ID do usuário.');
+        return;
+      }
+
+      let veiculos = [];
+
+      try {
+        veiculos = await buscarVeiculosDoUsuario(uid);
+      } catch (apiError) {
+        console.warn('Erro ao buscar veículos, direcionando para cadastro:', apiError);
+      }
+
+      if (!veiculos || veiculos.length === 0) {
         navigation.replace('Cadastro');
       } else {
         navigation.replace('Main');
       }
+
     } catch (err: any) {
-      Alert.alert('Falha', err.message);
+      Alert.alert('Falha', err.message || 'Erro inesperado ao autenticar');
     } finally {
       setLoading(false);
     }
@@ -91,8 +105,12 @@ export default function LoginScreen() {
             >
               <Text style={styles.buttonText}>
                 {loading
-                  ? mode === 'login' ? 'Entrando...' : 'Cadastrando...'
-                  : mode === 'login' ? 'Entrar' : 'Criar Conta'}
+                  ? mode === 'login'
+                    ? 'Entrando...'
+                    : 'Cadastrando...'
+                  : mode === 'login'
+                    ? 'Entrar'
+                    : 'Criar Conta'}
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -117,7 +135,7 @@ const styles = StyleSheet.create({
   header: {
     width: '100%',
     backgroundColor: '#7e54f6',
-    paddingVertical:30,
+    paddingVertical: 30,
     alignItems: 'center',
     borderBottomLeftRadius: 20,
     borderBottomRightRadius: 20,

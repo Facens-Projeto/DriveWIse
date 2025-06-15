@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   View,
@@ -9,7 +10,7 @@ import {
   Image,
   Alert,
 } from 'react-native';
-import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation, CommonActions } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../App';
 import { signOut, getUserId } from '../services/firebase';
@@ -23,36 +24,40 @@ const VisaoPessoalScreen = () => {
   useFocusEffect(
     useCallback(() => {
       const carregarDados = async () => {
-        const uid = await getUserId();
-        if (!uid) {
-          Alert.alert('Erro', 'Usuário não autenticado.');
-          return;
-        }
-
-        const veiculos = await buscarVeiculosDoUsuario(uid);
-        if (veiculos.length > 0) {
-          const { veiculo, condutor } = veiculos[0];
-          setCarro({
-            marca: veiculo.marca,
-            modelo: veiculo.modelo,
-            ano: veiculo.ano,
-            quilometragem: veiculo.quilometragem,
-          });
-          setCondutor(condutor);
+        try {
+          const uid = await getUserId();
+          if (!uid) return;
+          const veiculos = await buscarVeiculosDoUsuario(uid);
+          if (veiculos.length > 0 && veiculos[0].veiculo && veiculos[0].condutor) {
+            setCarro(veiculos[0].veiculo);
+            setCondutor(veiculos[0].condutor);
+          }else {
+            Alert.alert(
+              'Cadastro necessário',
+              'Nenhum veículo encontrado para sua conta. Complete o cadastro para continuar.',
+              [
+                {
+                  text: 'Cadastrar agora',
+                  onPress: () => navigation.replace('Cadastro'),
+                },
+              ]
+            );
+          }
+        } catch (e) {
+          console.error('Erro ao carregar dados:', e);
+          Alert.alert('Erro', 'Não foi possível carregar os dados do usuário.');
         }
       };
-
       carregarDados();
     }, [])
   );
 
   return (
     <View style={{ flex: 1, backgroundColor: '#121212' }}>
-      <ScrollView
-        contentContainerStyle={[styles.container, { flexGrow: 1, paddingBottom: 100 }]}
-        keyboardShouldPersistTaps="handled"
-      >
+      <ScrollView contentContainerStyle={[styles.container, { flexGrow: 1, paddingBottom: 100 }]}
+                  keyboardShouldPersistTaps="handled">
         <StatusBar barStyle="light-content" backgroundColor="#7e54f6" />
+
         <View style={styles.header}>
           <Text style={styles.headerText}>Visão Pessoal</Text>
           <Image source={require('../assets/img1.png')} style={styles.logo} />
@@ -77,9 +82,11 @@ const VisaoPessoalScreen = () => {
         )}
 
         <View style={styles.card}>
+          <Text style={styles.cardTitle}>Ações</Text>
+
           <TouchableOpacity
             style={[styles.logoutButton, { backgroundColor: '#444', marginBottom: 12 }]}
-            onPress={() => Alert.alert('Aviso', 'Com MongoDB, os dados locais não precisam mais ser apagados.')}
+            onPress={() => Alert.alert('Desativado', 'Apagar dados locais não é mais necessário com API.')}
           >
             <Text style={[styles.logoutText, { color: '#fff' }]}>Apagar Dados Locais</Text>
           </TouchableOpacity>
@@ -88,7 +95,9 @@ const VisaoPessoalScreen = () => {
             style={styles.logoutButton}
             onPress={async () => {
               await signOut();
-              navigation.replace('Login');
+              navigation.dispatch(
+                CommonActions.reset({ index: 0, routes: [{ name: 'Login' }] })
+              );
             }}
           >
             <Text style={styles.logoutText}>Sair da Conta</Text>
@@ -145,12 +154,12 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 30,
     borderRadius: 8,
-    alignItems: 'center',
   },
   logoutText: {
     color: '#E53935',
     fontSize: 16,
     fontWeight: '600',
+    textAlign: 'center',
   },
 });
 

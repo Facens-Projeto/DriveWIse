@@ -91,34 +91,120 @@ export default function CadastroScreen() {
           ano: parseInt(ano, 10),
           quilometragem: parseInt(kmAtual.replace(/\./g, ''), 10),
           combustiveisAceitos: combustiveis,
-          modificacoes
+          modificacoes,
         },
         condutor: {
           estilo,
           ruas,
           frequencia,
           estado,
-          cidade
+          cidade,
         },
         count: 0,
-        avgEfficiency: {}
+        avgEfficiency: {
+              gasolina: 0,
+    alcool: 0,
+    diesel: 0
+        },
       };
 
       await cadastrarVeiculoMongo(cadastro);
 
-      navigation.replace('Main');
-      Alert.alert('Sucesso', 'Cadastro salvo no MongoDB!');
+      Alert.alert('Sucesso', 'Cadastro salvo online com sucesso!');
       limpar();
+      navigation.replace('Main');
     } catch (e) {
-      console.error('Erro ao salvar no MongoDB:', e);
-      Alert.alert('Erro ao salvar no MongoDB. Verifique os dados.');
+      console.error('Erro ao salvar cadastro online:', e);
+      Alert.alert('Erro', 'Não foi possível salvar o cadastro online.');
     }
   };
 
   return (
-    // ... (restante do JSX permanece igual)
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-      {/* JSX não alterado */}
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <ScrollView style={styles.container}>
+        <View style={styles.topBanner}>
+          <Text style={styles.bannerText}>👋 Bem-vindo ao DriveWise</Text>
+          <Image source={require('../assets/img1.png')} style={styles.bannerLogo} />
+        </View>
+
+        <Text style={styles.sectionTitle}>🚗 Informações do veículo</Text>
+        <Text style={styles.label}>Marca</Text>
+        <View style={styles.buttonGroup}>
+          {Object.keys(MARCAS).map(m => (
+            <TouchableOpacity key={m} style={[styles.optionButton, marca === m && styles.selected]} onPress={() => { setMarca(m); setModelo(''); }}>
+              <Text style={styles.optionText}>{m}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        <Text style={styles.label}>Modelo</Text>
+        <View style={styles.buttonGroup}>
+          {MARCAS[marca]?.map(mod => (
+            <TouchableOpacity key={mod} style={[styles.optionButton, modelo === mod && styles.selected]} onPress={() => setModelo(mod)}>
+              <Text style={styles.optionText}>{mod}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        <Text style={styles.label}>Ano</Text>
+        <TextInput style={styles.input} keyboardType="numeric" value={ano} onChangeText={setAno} placeholder="Ex: 2020" placeholderTextColor="#888" />
+
+        <Text style={styles.label}>Quilometragem Atual</Text>
+        <TextInput style={styles.input} keyboardType="numeric" value={kmAtual} onChangeText={(t) => setKmAtual(formatarKM(t))} placeholder="Ex: 35.000" placeholderTextColor="#888" />
+
+        <Text style={styles.label}>Combustíveis Aceitos</Text>
+        <View style={styles.buttonGroup}>
+          {COMBUSTIVEIS.map(c => (
+            <TouchableOpacity
+              key={c}
+              style={[styles.optionButton, combustiveis.includes(c) && styles.selected]}
+              onPress={() => toggleCombustivel(c)}
+            >
+              <Text style={styles.optionText}>{c}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        <Text style={styles.label}>Modificações (opcional)</Text>
+        <TextInput style={styles.input} value={modificacoes} onChangeText={setModificacoes} placeholder="Suspensão, rodas, etc." placeholderTextColor="#888" />
+
+        <Text style={styles.sectionTitle}>Perfil do Condutor</Text>
+
+        <Text style={styles.label}>Estilo de Condução</Text>
+        {[
+          { label: 'Dona Neusa', desc: 'Anda abaixo da média e não acelera quase nunca.' },
+          { label: 'Figurante', desc: 'Nada além da média, medíocre, indiferente.' },
+          { label: 'Protagonista', desc: 'Se acha o Braia, dirige como se tivesse vida extra.' },
+        ].map(op => (
+          <TouchableOpacity key={op.label} style={[styles.button, estilo === op.label && styles.buttonSelected]} onPress={() => setEstilo(op.label)}>
+            <Text style={styles.buttonText}>{`${op.label} — ${op.desc}`}</Text>
+          </TouchableOpacity>
+        ))}
+
+        <Text style={styles.label}>Tipo de Ruas</Text>
+        {['Bem asfaltadas', 'Irregulares', 'Cheias de Buracos'].map(r => (
+          <TouchableOpacity key={r} style={[styles.button, ruas === r && styles.buttonSelected]} onPress={() => setRuas(r)}>
+            <Text style={styles.buttonText}>{r}</Text>
+          </TouchableOpacity>
+        ))}
+
+        <Text style={styles.label}>Frequência de Viagens</Text>
+        {['Nunca', 'Baixa (1-2x/mês)', 'Média (2-5x/mês)', 'Alta (+10x/mês)'].map(f => (
+          <TouchableOpacity key={f} style={[styles.button, frequencia === f && styles.buttonSelected]} onPress={() => setFrequencia(f)}>
+            <Text style={styles.buttonText}>{f}</Text>
+          </TouchableOpacity>
+        ))}
+
+        <Text style={styles.label}>Estado</Text>
+        <TextInput style={styles.input} value={estado} onChangeText={setEstado} placeholder="SP, RJ, MG..." placeholderTextColor="#888" />
+
+        <Text style={styles.label}>Cidade</Text>
+        <TextInput style={styles.input} value={cidade} onChangeText={setCidade} placeholder="São Paulo, Belo Horizonte..." placeholderTextColor="#888" />
+
+        <TouchableOpacity style={styles.saveButton} onPress={salvarCadastro}>
+          <Text style={styles.saveButtonText}>Salvar Cadastro</Text>
+        </TouchableOpacity>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }
@@ -147,9 +233,9 @@ const styles = StyleSheet.create({
   optionButton: { borderWidth: 1, borderColor: '#777', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 8, marginRight: 8, marginTop: 4, backgroundColor: '#222' },
   optionText: { color: '#fff' },
   selected: { backgroundColor: '#7e54f6', borderColor: '#a27bff' },
+  button: { borderWidth: 1, borderColor: '#777', borderRadius: 10, padding: 10, backgroundColor: '#1e1e1e', marginTop: 6 },
+  buttonText: { color: '#fff', fontSize: 14 },
+  buttonSelected: { backgroundColor: '#7e54f6', borderColor: '#a27bff' },
   saveButton: { backgroundColor: '#7e54f6', padding: 14, borderRadius: 10, alignItems: 'center', marginTop: 24, marginBottom: 40 },
   saveButtonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
-  button: { backgroundColor: '#1e1e1e', padding: 12, borderRadius: 8, marginVertical: 4, borderWidth: 1, borderColor: '#555' },
-  buttonSelected: { backgroundColor: '#7e54f6', borderColor: '#a27bff' },
-  buttonText: { color: '#fff', fontSize: 14 },
 });
