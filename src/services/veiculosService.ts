@@ -1,9 +1,9 @@
 import axios from 'axios';
 const BASE_URL = 'https://drivewise-production.up.railway.app';
 
-// Salva novo veículo
+// ✅ Salva novo veículo
 export async function cadastrarVeiculoMongo(veiculo: any) {
-    console.log('Enviando para a API:', JSON.stringify(veiculo, null, 2)); // 👈
+  console.log('Enviando para a API:', JSON.stringify(veiculo, null, 2));
   const response = await fetch(`${BASE_URL}/veiculos`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -12,20 +12,20 @@ export async function cadastrarVeiculoMongo(veiculo: any) {
   if (!response.ok) throw new Error('Erro ao cadastrar veículo na API');
   return await response.json();
 }
-// ✅ Novo: Buscar todos os abastecimentos (globais)
+
+// ✅ Buscar todos os abastecimentos globais
 export async function buscarAbastecimentosGlobais() {
   const response = await fetch(`${BASE_URL}/abastecimentos`);
   if (!response.ok) throw new Error('Erro ao buscar abastecimentos globais');
   return await response.json();
 }
 
+// ✅ Atualiza médias de eficiência com base nos abastecimentos
 export async function atualizarMediaEficiencia(uid: string) {
   try {
-    // Busca os abastecimentos do usuário
     const respAbast = await axios.get(`${BASE_URL}/abastecimentos/${uid}`);
     const abastecimentos = respAbast.data;
 
-    // Filtra e organiza os dados por tipo
     const rendimentos: { [key: string]: number[] } = {
       gasolina: [],
       alcool: []
@@ -39,7 +39,6 @@ export async function atualizarMediaEficiencia(uid: string) {
       const atual = lista[i];
       const anterior = lista[i - 1];
       const tipo = atual.tipo?.toLowerCase();
-
       const tipoKey = tipo === 'álcool' ? 'alcool' : tipo;
       if (!['gasolina', 'alcool'].includes(tipoKey)) continue;
 
@@ -58,7 +57,6 @@ export async function atualizarMediaEficiencia(uid: string) {
       ? rendimentos.alcool.reduce((a, b) => a + b, 0) / rendimentos.alcool.length
       : 0;
 
-    // Atualiza o veículo com as médias
     await axios.patch(`${BASE_URL}/veiculos/${uid}`, {
       avgEfficiency: {
         gasolina: parseFloat(mediaGasolina.toFixed(2)),
@@ -72,21 +70,21 @@ export async function atualizarMediaEficiencia(uid: string) {
   }
 }
 
-// Busca veículos por UID
+// ✅ Buscar veículos por UID
 export async function buscarVeiculosDoUsuario(uid: string) {
   const response = await fetch(`${BASE_URL}/veiculos/${uid}`);
   if (!response.ok) throw new Error('Erro ao buscar veículos do usuário');
   return await response.json();
 }
 
-// Busca todos os veículos (comunitários)
+// ✅ Buscar todos os veículos
 export async function buscarTodosVeiculos() {
   const response = await fetch(`${BASE_URL}/veiculos`);
   if (!response.ok) throw new Error('Erro ao buscar veículos comunitários');
   return await response.json();
 }
 
-// ✅ Novo: Cadastrar abastecimento
+// ✅ Cadastrar novo abastecimento
 export async function cadastrarAbastecimento(uid: string, abastecimento: any) {
   const response = await fetch(`${BASE_URL}/abastecimentos`, {
     method: 'POST',
@@ -97,14 +95,14 @@ export async function cadastrarAbastecimento(uid: string, abastecimento: any) {
   return await response.json();
 }
 
-// ✅ Novo: Buscar abastecimentos de um usuário
+// ✅ Buscar abastecimentos por UID
 export async function buscarAbastecimentosDoUsuario(uid: string) {
   const response = await fetch(`${BASE_URL}/abastecimentos/${uid}`);
   if (!response.ok) throw new Error('Erro ao buscar abastecimentos');
   return await response.json();
 }
 
-// ✅ Novo: Atualizar quilometragem do veículo
+// ✅ Atualizar quilometragem do veículo
 export async function atualizarQuilometragem(uid: string, quilometragem: number) {
   const response = await fetch(`${BASE_URL}/quilometragem/${uid}`, {
     method: 'PATCH',
@@ -112,5 +110,12 @@ export async function atualizarQuilometragem(uid: string, quilometragem: number)
     body: JSON.stringify({ quilometragem }),
   });
   if (!response.ok) throw new Error('Erro ao atualizar quilometragem');
+  return await response.json();
+}
+
+// ✅ Buscar estatísticas comunitárias
+export async function buscarEstatisticasComunitarias() {
+  const response = await fetch(`${BASE_URL}/estatisticas`);
+  if (!response.ok) throw new Error('Erro ao buscar estatísticas');
   return await response.json();
 }

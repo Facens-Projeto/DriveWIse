@@ -11,10 +11,10 @@ import {
   StatusBar,
   Alert,
 } from 'react-native';
+import { buscarTodosVeiculos } from '../services/veiculosService'; // Importa a função para buscar todos os veículos
 import { useFocusEffect } from '@react-navigation/native';
 import { getUserId } from '../services/firebase';
-
-const API_URL = 'https://drivewise-production.up.railway.app';
+import { buscarVeiculosDoUsuario } from '../services/veiculosService';
 
 interface CommunityStat {
   marca: string;
@@ -41,10 +41,10 @@ export default function DadosComunitariosScreen() {
           const uid = await getUserId();
           if (!uid) throw new Error('Usuário não autenticado');
 
-          const resVeiculos = await fetch(`${API_URL}/veiculos/${uid}`);
-          const veiculos = await resVeiculos.json();
-          const veiculo = veiculos[0]?.veiculo;
-          const condutor = veiculos[0]?.condutor;
+          const dados = await buscarVeiculosDoUsuario(uid);
+          const veiculo = dados[0]?.veiculo;
+          const condutor = dados[0]?.condutor;
+          const abastecimentos = dados[0]?.abastecimentos || [];
 
           if (!veiculo || !condutor) {
             Alert.alert('Perfil não encontrado', 'Por favor, cadastre seu veículo primeiro.');
@@ -52,47 +52,79 @@ export default function DadosComunitariosScreen() {
             return;
           }
 
-          const userAvg = veiculos[0]?.avgEfficiency || {};
-          setUserEff({
-            gasolina: userAvg.gasolina || 0,
-            alcool: userAvg.alcool || 0,
-          });
-
           const { marca, modelo } = veiculo;
           const { cidade } = condutor;
 
-          const resEst = await fetch(`${API_URL}/estatisticas`);
-          const estatisticas = await resEst.json();
+const eficiencia = dados[0]?.avgEfficiency || { gasolina: 0, alcool: 0 };
+console.log('Eficiência do usuário:', eficiencia);
 
-          const statsMesmoModelo = estatisticas.filter((s: any) =>
-            s.marca.toLowerCase() === marca.toLowerCase() &&
-            s.modelo.toLowerCase() === modelo.toLowerCase()
-          );
 
-          const local = statsMesmoModelo.filter((s: any) => s.cidade?.toLowerCase() === cidade.toLowerCase());
+setUserEff({
+  gasolina: eficiencia.gasolina || 0,
+  alcool: eficiencia.alcool || 0,
+});
+
+          // Obtem todos os dados da API
+          const todos = await buscarTodosVeiculos();
+          const allStats = todos
+            .map((item: any) => ({
+              marca: item.veiculo.marca,
+              modelo: item.veiculo.modelo,
+              cidade: item.condutor.cidade,
+              avgEfficiency: {
+                gasolina: item.avgEfficiency?.gasolina || 0,
+                alcool: item.avgEfficiency?.alcool || 0,
+              },
+            }))
+            .filter((s: any) =>
+              s.marca.toLowerCase() === marca.toLowerCase() &&
+              s.modelo.toLowerCase() === modelo.toLowerCase()
+            );
+
+          const local = allStats.filter((s: any) => s.cidade?.toLowerCase() === cidade.toLowerCase());
 
           if (local.length > 0) {
-            const sumGas = local.reduce((sum: number, s: any) => sum + s.avgEfficiency.gasolina, 0);
-            const sumAlc = local.reduce((sum: number, s: any) => sum + s.avgEfficiency.alcool, 0);
-            setLocalStat({ marca, modelo, cidade, count: local.length, avgEfficiency: {
-              gasolina: sumGas / local.length,
-              alcool: sumAlc / local.length,
-            }});
+const localGasEntries = local.filter((s: any) => s.avgEfficiency.gasolina > 0);
+const localAlcEntries = local.filter((s: any) => s.avgEfficiency.alcool > 0);
+
+const sumGas = localGasEntries.reduce((sum: number, s: any) => sum + s.avgEfficiency.gasolina, 0);
+const sumAlc = localAlcEntries.reduce((sum: number, s: any) => sum + s.avgEfficiency.alcool, 0);
+
+setLocalStat({
+  marca,
+  modelo,
+  cidade,
+  count: local.length,
+  avgEfficiency: {
+    gasolina: localGasEntries.length > 0 ? sumGas / localGasEntries.length : 0,
+    alcool: localAlcEntries.length > 0 ? sumAlc / localAlcEntries.length : 0,
+  },
+});
+
           } else {
             setLocalStat(null);
           }
 
-          if (statsMesmoModelo.length > 0) {
-            const sumGas = statsMesmoModelo.reduce((sum: number, s: any) => sum + s.avgEfficiency.gasolina, 0);
-            const sumAlc = statsMesmoModelo.reduce((sum: number, s: any) => sum + s.avgEfficiency.alcool, 0);
-            setGlobalStat({ marca, modelo, count: statsMesmoModelo.length, avgEfficiency: {
-              gasolina: sumGas / statsMesmoModelo.length,
-              alcool: sumAlc / statsMesmoModelo.length,
-            }});
+          if (allStats.length > 0) {
+const gasEntries = allStats.filter((s: any) => s.avgEfficiency.gasolina > 0);
+const alcEntries = allStats.filter((s: any) => s.avgEfficiency.alcool > 0);
+
+const sumGas = gasEntries.reduce((sum: number, s: any) => sum + s.avgEfficiency.gasolina, 0);
+const sumAlc = alcEntries.reduce((sum: number, s: any) => sum + s.avgEfficiency.alcool, 0);
+
+setGlobalStat({
+  marca,
+  modelo,
+  count: allStats.length,
+  avgEfficiency: {
+    gasolina: gasEntries.length > 0 ? sumGas / gasEntries.length : 0,
+    alcool: alcEntries.length > 0 ? sumAlc / alcEntries.length : 0,
+  },
+});
+
           } else {
             setGlobalStat(null);
           }
-
         } catch (e) {
           console.error('❌ Erro ao carregar dados comunitários:', e);
           Alert.alert('Erro', 'Não foi possível carregar os dados comunitários.');
@@ -113,12 +145,14 @@ export default function DadosComunitariosScreen() {
         </View>
       );
     }
-    const diffGas = userEff.gasolina
-      ? ((userEff.gasolina - stat.avgEfficiency.gasolina) / stat.avgEfficiency.gasolina) * 100
-      : 0;
-    const diffAlc = userEff.alcool
-      ? ((userEff.alcool - stat.avgEfficiency.alcool) / stat.avgEfficiency.alcool) * 100
-      : 0;
+const diffGas = userEff.gasolina === 0 || stat.avgEfficiency.gasolina === 0
+  ? 0
+  : ((userEff.gasolina - stat.avgEfficiency.gasolina) / stat.avgEfficiency.gasolina) * 100;
+
+const diffAlc = userEff.alcool === 0 || stat.avgEfficiency.alcool === 0
+  ? 0
+  : ((userEff.alcool - stat.avgEfficiency.alcool) / stat.avgEfficiency.alcool) * 100;
+
 
     return (
       <View style={styles.card}>

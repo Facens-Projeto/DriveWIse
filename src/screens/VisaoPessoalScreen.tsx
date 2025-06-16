@@ -65,15 +65,25 @@ const VisaoPessoalScreen = () => {
 
             setResumoInfo({ totalAbastecimentos, primeiraData, ultimaData, kmTotalRodado, totalGastoGeral, tiposContagem, tiposGasto, preferencia, temMultiplosCombustiveis: Object.keys(tiposContagem).length > 1 });
 
-            const lista = [];
+            const agrupado: any = {};
             for (let i = 1; i < abastecs.length; i++) {
               const atual = abastecs[i - 1];
               const anterior = abastecs[i];
               const trajeto = atual.km - anterior.km;
+              if (trajeto <= 0) continue;
               const rendimento = trajeto / anterior.litros;
               const custoKm = anterior.total / trajeto;
-              lista.push({ tipo: anterior.tipo, media: rendimento, custoKm });
+              if (!agrupado[anterior.tipo]) agrupado[anterior.tipo] = { tipo: anterior.tipo, totalMedia: 0, totalCusto: 0, count: 0 };
+              agrupado[anterior.tipo].totalMedia += rendimento;
+              agrupado[anterior.tipo].totalCusto += custoKm;
+              agrupado[anterior.tipo].count++;
             }
+
+            const lista = Object.values(agrupado).map((item: any) => ({
+              tipo: item.tipo,
+              media: item.totalMedia / item.count,
+              custoKm: item.totalCusto / item.count
+            }));
             const melhor = lista.sort((a, b) => a.custoKm - b.custoKm)[0];
             setComparativoCombustivel({ lista, melhor });
           }
@@ -125,15 +135,15 @@ const VisaoPessoalScreen = () => {
               <>
                 <Text style={[styles.cardSubtitle, { marginTop: 10 }]}>⛽ Abastecimentos por combustível:</Text>
                 {Object.entries(resumoInfo.tiposContagem).map(([tipo, qtd]) => (
-                  <Text key={tipo} style={styles.cardContent}>• {tipo}: {String(qtd)} vezes</Text>
+                  <Text key={tipo + '-qtd'} style={styles.cardContent}>• {tipo}: {String(qtd)} vezes</Text>
                 ))}
                 <Text style={[styles.cardSubtitle, { marginTop: 10 }]}>📈 Preferência de uso:</Text>
                 {Object.entries(resumoInfo.preferencia).map(([tipo, perc]) => (
-                  <Text key={tipo} style={styles.cardContent}>• {tipo}: {String(perc)}</Text>
+                  <Text key={tipo + '-pref'} style={styles.cardContent}>• {tipo}: {String(perc)}</Text>
                 ))}
                 <Text style={[styles.cardSubtitle, { marginTop: 10 }]}>💸 Gasto por combustível:</Text>
                 {Object.entries(resumoInfo.tiposGasto).map(([tipo, val]) => (
-                  <Text key={tipo} style={styles.cardContent}>• {tipo}: R$ {(val as number).toFixed(2).replace('.', ',')}</Text>
+                  <Text key={tipo + '-gasto'} style={styles.cardContent}>• {tipo}: R$ {(val as number).toFixed(2).replace('.', ',')}</Text>
                 ))}
               </>
             )}
@@ -144,7 +154,7 @@ const VisaoPessoalScreen = () => {
           <View style={styles.card}>
             <Text style={styles.cardTitle}>🔍 Comparativo de Combustíveis</Text>
             {comparativoCombustivel.lista.map((item: any) => (
-              <Text key={item.tipo} style={styles.cardContent}>
+              <Text key={item.tipo + '-cmp'} style={styles.cardContent}>
                 {item.tipo} – Consumo médio: {item.media.toFixed(2)} km/L – Custo por km: R$ {item.custoKm.toFixed(2).replace('.', ',')}
               </Text>
             ))}
@@ -182,12 +192,7 @@ const VisaoPessoalScreen = () => {
 
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Ações</Text>
-          <TouchableOpacity
-            style={[styles.logoutButton, { backgroundColor: '#444', marginBottom: 12 }]}
-            onPress={() => Alert.alert('Desativado', 'Apagar dados locais não é mais necessário com API.')}
-          >
-            <Text style={[styles.logoutText, { color: '#fff' }]}>Apagar Dados Locais</Text>
-          </TouchableOpacity>
+ 
           <TouchableOpacity
             style={styles.logoutButton}
             onPress={async () => {

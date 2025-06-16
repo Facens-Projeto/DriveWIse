@@ -1,4 +1,4 @@
-// FuelFormScreen.tsx — atualizado para funcionar 100% online com atualização de eficiência
+// FuelFormScreen.tsx — atualizado para funcionar 100% online com atualização de eficiência segura
 
 import React, { useEffect, useState, useCallback } from 'react';
 import {
@@ -27,7 +27,6 @@ import {
 
 const FuelFormScreen = () => {
   const [fuelType, setFuelType] = useState<string | null>(null);
-  const [variacaoInfo, setVariacaoInfo] = useState<{ melhorou: boolean; valor: string } | null>(null);
   const [precoPorLitro, setPrecoPorLitro] = useState('');
   const [totalAbastecido, setTotalAbastecido] = useState('');
   const [litrosAbastecidos, setLitrosAbastecidos] = useState('');
@@ -70,8 +69,6 @@ const FuelFormScreen = () => {
             if (veiculo.veiculo.combustiveisAceitos.length === 1) {
               setFuelType(veiculo.veiculo.combustiveisAceitos[0]);
             }
-          } else {
-            console.warn('Combustíveis não encontrados no objeto veiculo:', veiculo);
           }
         } catch (error) {
           console.error('Erro ao carregar combustíveis:', error);
@@ -92,76 +89,78 @@ const FuelFormScreen = () => {
     setResultado('');
   };
 
-  const salvar = async () => {
-    if (!fuelType || !precoPorLitro || !totalAbastecido || !litrosAbastecidos || !kmAtual) {
-      Alert.alert('Preencha todos os campos!');
-      return;
+ const salvar = async () => {
+  if (!fuelType || !precoPorLitro || !totalAbastecido || !litrosAbastecidos || !kmAtual) {
+    Alert.alert('Preencha todos os campos!');
+    return;
+  }
+
+  const uid = await getUserId();
+  if (!uid) {
+    Alert.alert('Erro ao obter usuário. Tente novamente.');
+    return;
+  }
+
+  const preco = parseFloat(precoPorLitro.replace(',', '.'));
+  const total = parseFloat(totalAbastecido.replace(',', '.'));
+  const litros = parseFloat(litrosAbastecidos.replace(',', '.'));
+  const km = parseInt(kmAtual.replace(/\./g, ''));
+  const data = new Date().toISOString();
+
+  const novo = { uid, tipo: fuelType, preco, total, litros, km, data };
+
+  await cadastrarAbastecimento(uid, novo);
+  await atualizarQuilometragem(uid, km);
+  await atualizarMediaEficiencia(uid);
+
+  const todos = await buscarAbastecimentosDoUsuario(uid);
+
+  const anterioresMesmoTipo = todos
+    .filter((a: any) => a.tipo === fuelType)
+    .sort((a: any, b: any) => new Date(b.data).getTime() - new Date(a.data).getTime());
+
+  let resumo = null;
+  if (anterioresMesmoTipo.length >= 2) {
+    const anterior = anterioresMesmoTipo[0];
+    const penultimo = anterioresMesmoTipo[1];
+    const trajeto = anterior.km - penultimo.km;
+    const rendimento = trajeto > 0 ? trajeto / penultimo.litros : 0;
+    const custoPorKm = trajeto > 0 ? penultimo.total / trajeto : 0;
+
+    let variacaoTexto = 'Não disponível';
+    let variacaoValor = null;
+    let melhorou = null;
+
+    if (anterioresMesmoTipo.length >= 3) {
+      const antepenultimo = anterioresMesmoTipo[2];
+      const trajetoAnt = penultimo.km - antepenultimo.km;
+      const rendimentoAnt = trajetoAnt > 0 ? trajetoAnt / antepenultimo.litros : 0;
+      const variacao = rendimentoAnt > 0 ? ((rendimento - rendimentoAnt) / rendimentoAnt) * 100 : 0;
+      variacaoTexto = `${variacao > 0 ? '+' : ''}${variacao.toFixed(1)}%`;
+      variacaoValor = Math.abs(variacao).toFixed(1);
+      melhorou = variacao > 0;
     }
 
-    const uid = await getUserId();
-    if (!uid) {
-      Alert.alert('Erro ao obter usuário. Tente novamente.');
-      return;
-    }
-    const preco = parseFloat(precoPorLitro.replace(',', '.'));
-    const total = parseFloat(totalAbastecido.replace(',', '.'));
-    const litros = parseFloat(litrosAbastecidos.replace(',', '.'));
-    const km = parseInt(kmAtual.replace(/\./g, ''));
-    const data = new Date().toISOString();
+    resumo = {
+      tipo: penultimo.tipo,
+      data: penultimo.data,
+      litros: penultimo.litros,
+      total: penultimo.total,
+      trajeto,
+      rendimento,
+      custoPorKm,
+      variacaoTexto,
+      variacaoValor,
+      melhorou,
+      preco: penultimo.preco,
+      km: penultimo.km,
+    };
+  }
 
-    const novo = { uid, tipo: fuelType, preco, total, litros, km, data };
-
-    await cadastrarAbastecimento(uid, novo);
-    await atualizarQuilometragem(uid, km);
-    await atualizarMediaEficiencia(uid);
-
-    const todos = await buscarAbastecimentosDoUsuario(uid);
-
-    const anterioresMesmoTipo = [novo, ...todos]
-      .filter((a: any) => a.tipo === fuelType)
-      .sort((a: any, b: any) => new Date(b.data).getTime() - new Date(a.data).getTime());
-
-    let resumo = null;
-    if (anterioresMesmoTipo.length >= 1) {
-      const anterior = anterioresMesmoTipo[0];
-      const trajeto = km - anterior.km;
-      const rendimento = trajeto / anterior.litros;
-      const custoPorKm = anterior.total / trajeto;
-
-      let variacaoTexto = 'Não disponível';
-      let variacaoValor = null;
-      let melhorou = null;
-
-      if (anterioresMesmoTipo.length >= 2) {
-        const penultimo = anterioresMesmoTipo[1];
-        const trajetoPenultimo = anterior.km - penultimo.km;
-        const rendimentoPenultimo = trajetoPenultimo / penultimo.litros;
-        const variacao = ((rendimento - rendimentoPenultimo) / rendimentoPenultimo) * 100;
-        variacaoTexto = `${variacao > 0 ? '+' : ''}${variacao.toFixed(1)}%`;
-        variacaoValor = Math.abs(variacao).toFixed(1);
-        melhorou = variacao > 0;
-      }
-
-      resumo = {
-        tipo: anterior.tipo,
-        data: anterior.data,
-        litros: anterior.litros,
-        total: anterior.total,
-        trajeto,
-        rendimento,
-        custoPorKm,
-        variacaoTexto,
-        variacaoValor,
-        melhorou,
-        preco: anterior.preco,
-        km: anterior.km,
-      };
-    }
-
-    setResumoData(resumo);
-    setModalVisible(true);
-    limpar();
-  };
+  setResumoData(resumo);
+  setModalVisible(true);
+  limpar();
+};
 
   
   return (
