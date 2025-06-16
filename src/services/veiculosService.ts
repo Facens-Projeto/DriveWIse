@@ -11,6 +11,13 @@ export async function cadastrarVeiculoMongo(veiculo: any) {
   if (!response.ok) throw new Error('Erro ao cadastrar veículo na API');
   return await response.json();
 }
+// ✅ Novo: Buscar todos os abastecimentos (globais)
+export async function buscarAbastecimentosGlobais() {
+  const response = await fetch(`${BASE_URL}/abastecimentos`);
+  if (!response.ok) throw new Error('Erro ao buscar abastecimentos globais');
+  return await response.json();
+}
+
 
 // Busca veículos por UID
 export async function buscarVeiculosDoUsuario(uid: string) {

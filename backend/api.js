@@ -19,6 +19,19 @@ app.get('/', (req, res) => {
   res.send('API DriveWise está online 🚀');
 });
 
+// ✅ GET todos os abastecimentos (para uso global)
+app.get('/abastecimentos', async (req, res) => {
+  try {
+    await client.connect();
+    const dados = await client.db(dbName).collection(abastecimentosCollection).find({}).toArray();
+    res.json(dados);
+  } catch (err) {
+    console.error('Erro ao buscar abastecimentos globais:', err);
+    res.status(500).json({ erro: 'Erro ao buscar abastecimentos globais' });
+  }
+});
+
+
 // ✅ GET todos os veículos
 app.get('/veiculos', async (req, res) => {
   try {
