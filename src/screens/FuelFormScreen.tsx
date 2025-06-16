@@ -1,4 +1,4 @@
-// FuelFormScreen.tsx — atualizado para funcionar 100% online
+// FuelFormScreen.tsx — atualizado para funcionar 100% online com atualização de eficiência
 
 import React, { useEffect, useState, useCallback } from 'react';
 import {
@@ -22,15 +22,12 @@ import {
   buscarAbastecimentosDoUsuario,
   atualizarQuilometragem,
   buscarVeiculosDoUsuario,
+  atualizarMediaEficiencia,
 } from '../services/veiculosService';
 
 const FuelFormScreen = () => {
   const [fuelType, setFuelType] = useState<string | null>(null);
-  const [variacaoInfo, setVariacaoInfo] = useState<{
-    melhorou: boolean;
-    valor: string;
-  } | null>(null);
-
+  const [variacaoInfo, setVariacaoInfo] = useState<{ melhorou: boolean; valor: string } | null>(null);
   const [precoPorLitro, setPrecoPorLitro] = useState('');
   const [totalAbastecido, setTotalAbastecido] = useState('');
   const [litrosAbastecidos, setLitrosAbastecidos] = useState('');
@@ -58,34 +55,31 @@ const FuelFormScreen = () => {
     }
   };
 
-useFocusEffect(
-  useCallback(() => {
-    const carregarCombustiveis = async () => {
-      try {
-        const uid = await getUserId();
-        if (!uid) return;
+  useFocusEffect(
+    useCallback(() => {
+      const carregarCombustiveis = async () => {
+        try {
+          const uid = await getUserId();
+          if (!uid) return;
 
-        const veiculos = await buscarVeiculosDoUsuario(uid);
-        const veiculo = veiculos?.[0]; // pega o primeiro veículo
+          const veiculos = await buscarVeiculosDoUsuario(uid);
+          const veiculo = veiculos?.[0];
 
-        if (veiculo?.veiculo?.combustiveisAceitos) {
-          setCombustiveisDisponiveis(veiculo.veiculo.combustiveisAceitos);
-
-          if (veiculo.veiculo.combustiveisAceitos.length === 1) {
-            setFuelType(veiculo.veiculo.combustiveisAceitos[0]);
+          if (veiculo?.veiculo?.combustiveisAceitos) {
+            setCombustiveisDisponiveis(veiculo.veiculo.combustiveisAceitos);
+            if (veiculo.veiculo.combustiveisAceitos.length === 1) {
+              setFuelType(veiculo.veiculo.combustiveisAceitos[0]);
+            }
+          } else {
+            console.warn('Combustíveis não encontrados no objeto veiculo:', veiculo);
           }
-        } else {
-          console.warn('Combustíveis não encontrados no objeto veiculo:', veiculo);
+        } catch (error) {
+          console.error('Erro ao carregar combustíveis:', error);
         }
-      } catch (error) {
-        console.error('Erro ao carregar combustíveis:', error);
-      }
-    };
-
-    carregarCombustiveis();
-  }, [])
-);
-
+      };
+      carregarCombustiveis();
+    }, [])
+  );
 
   const camposCompletos = precoPorLitro && totalAbastecido && litrosAbastecidos && kmAtual && (fuelType || combustiveisDisponiveis.length === 1);
 
@@ -119,12 +113,13 @@ useFocusEffect(
 
     await cadastrarAbastecimento(uid, novo);
     await atualizarQuilometragem(uid, km);
+    await atualizarMediaEficiencia(uid);
 
-const todos = await buscarAbastecimentosDoUsuario(uid);
+    const todos = await buscarAbastecimentosDoUsuario(uid);
 
-const anterioresMesmoTipo = [novo, ...todos] // garante que o novo vem primeiro
-  .filter((a: any) => a.tipo === fuelType)
-  .sort((a: any, b: any) => new Date(b.data).getTime() - new Date(a.data).getTime());
+    const anterioresMesmoTipo = [novo, ...todos]
+      .filter((a: any) => a.tipo === fuelType)
+      .sort((a: any, b: any) => new Date(b.data).getTime() - new Date(a.data).getTime());
 
     let resumo = null;
     if (anterioresMesmoTipo.length >= 1) {

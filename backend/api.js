@@ -19,6 +19,22 @@ app.get('/', (req, res) => {
   res.send('API DriveWise está online 🚀');
 });
 
+// ✅ Atualiza somente o campo avgEfficiency de um veículo
+app.patch('/veiculos/:uid', async (req, res) => {
+  try {
+    const { avgEfficiency } = req.body;
+    await client.connect();
+    const resultado = await client.db(dbName).collection('veiculos').updateOne(
+      { uid: req.params.uid },
+      { $set: { avgEfficiency } }
+    );
+    res.json({ ok: true, matchedCount: resultado.matchedCount });
+  } catch (err) {
+    console.error('Erro ao atualizar avgEfficiency:', err);
+    res.status(500).json({ erro: 'Erro ao atualizar média de eficiência' });
+  }
+});
+
 // ✅ GET todos os abastecimentos (para uso global)
 app.get('/abastecimentos', async (req, res) => {
   try {
@@ -30,7 +46,6 @@ app.get('/abastecimentos', async (req, res) => {
     res.status(500).json({ erro: 'Erro ao buscar abastecimentos globais' });
   }
 });
-
 
 // ✅ GET todos os veículos
 app.get('/veiculos', async (req, res) => {
@@ -60,8 +75,6 @@ app.get('/veiculos/:uid', async (req, res) => {
 app.post('/veiculos', async (req, res) => {
   try {
     const novo = req.body;
-
-    // 🐞 Log para depuração
     console.log('📥 Dados recebidos no backend (cadastro de veículo):');
     console.log(JSON.stringify(novo, null, 2));
 
@@ -80,6 +93,9 @@ app.post('/abastecimentos', async (req, res) => {
     const novo = req.body;
     await client.connect();
     const resultado = await client.db(dbName).collection(abastecimentosCollection).insertOne(novo);
+
+    await recalcularAvgEfficiency(novo.uid);
+
     res.json({ ok: true, insertedId: resultado.insertedId });
   } catch (err) {
     console.error('Erro ao salvar abastecimento:', err);
@@ -115,7 +131,7 @@ app.patch('/quilometragem/:uid', async (req, res) => {
   }
 });
 
-// ✅ Nova rota para cálculo de estatísticas comunitárias
+// ✅ GET estatísticas comunitárias
 app.get('/estatisticas', async (req, res) => {
   try {
     await client.connect();
@@ -123,13 +139,11 @@ app.get('/estatisticas', async (req, res) => {
     const veiculos = await client.db(dbName).collection(veiculosCollection).find({}).toArray();
     const abastecimentos = await client.db(dbName).collection(abastecimentosCollection).find({}).toArray();
 
-    const modelosMap = {}; // chave: "marca|modelo|cidade" => lista de abastecimentos
+    const modelosMap = {};
 
-    // 🔁 Adiciona abastecimentos antigos (do campo abastecimentos dentro de veiculos)
     for (const doc of veiculos) {
       const { veiculo, condutor, uid } = doc;
       const abasts = doc.abastecimentos || [];
-
       for (const a of abasts) {
         const chave = `${veiculo.marca}|${veiculo.modelo}|${condutor?.cidade || 'Desconhecida'}`;
         if (!modelosMap[chave]) modelosMap[chave] = [];
@@ -137,7 +151,6 @@ app.get('/estatisticas', async (req, res) => {
       }
     }
 
-    // 🔁 Adiciona abastecimentos novos (coleção separada)
     for (const a of abastecimentos) {
       const veiculo = veiculos.find(v => v.uid === a.uid);
       if (!veiculo) continue;
@@ -150,20 +163,15 @@ app.get('/estatisticas', async (req, res) => {
 
     for (const chave in modelosMap) {
       const [marca, modelo, cidade] = chave.split('|');
-      const lista = modelosMap[chave]
-        .filter((a) => a.km && a.litros > 0)
-        .sort((a, b) => a.km - b.km);
-
+      const lista = modelosMap[chave].filter((a) => a.km && a.litros > 0).sort((a, b) => a.km - b.km);
       const rendimentos = { gasolina: [], alcool: [] };
 
       for (let i = 1; i < lista.length; i++) {
         const atual = lista[i];
         const anterior = lista[i - 1];
-
         const tipo = atual.tipo?.toLowerCase();
         if (!['gasolina', 'álcool', 'alcool'].includes(tipo)) continue;
         const tipoKey = tipo === 'álcool' ? 'alcool' : tipo;
-
         const trajeto = atual.km - anterior.km;
         if (trajeto > 0 && anterior.litros > 0) {
           const rendimento = trajeto / anterior.litros;
@@ -193,6 +201,46 @@ app.get('/estatisticas', async (req, res) => {
   }
 });
 
+// ✅ Função para atualizar avgEfficiency automaticamente
+async function recalcularAvgEfficiency(uid) {
+  const veiculoDoc = await client.db(dbName).collection(veiculosCollection).findOne({ uid });
+  if (!veiculoDoc) return;
+
+  const abastecs = await client.db(dbName).collection(abastecimentosCollection)
+    .find({ uid }).sort({ km: 1 }).toArray();
+
+  const rendimentos = { gasolina: [], alcool: [] };
+
+  for (let i = 1; i < abastecs.length; i++) {
+    const atual = abastecs[i];
+    const anterior = abastecs[i - 1];
+    const tipo = atual.tipo?.toLowerCase();
+    if (!['gasolina', 'álcool', 'alcool'].includes(tipo)) continue;
+    const tipoKey = tipo === 'álcool' ? 'alcool' : tipo;
+    const trajeto = atual.km - anterior.km;
+    if (trajeto > 0 && anterior.litros > 0) {
+      const rendimento = trajeto / anterior.litros;
+      rendimentos[tipoKey].push(rendimento);
+    }
+  }
+
+  const mediaGas = rendimentos.gasolina.length > 0
+    ? (rendimentos.gasolina.reduce((a, b) => a + b, 0) / rendimentos.gasolina.length)
+    : 0;
+  const mediaAlc = rendimentos.alcool.length > 0
+    ? (rendimentos.alcool.reduce((a, b) => a + b, 0) / rendimentos.alcool.length)
+    : 0;
+
+  const avgEfficiency = {
+    gasolina: parseFloat(mediaGas.toFixed(2)),
+    alcool: parseFloat(mediaAlc.toFixed(2)),
+  };
+
+  await client.db(dbName).collection(veiculosCollection).updateOne(
+    { uid },
+    { $set: { avgEfficiency } }
+  );
+}
 
 const PORT = process.env.PORT || 8080;
 

@@ -41,12 +41,8 @@ export default function DadosComunitariosScreen() {
           const uid = await getUserId();
           if (!uid) throw new Error('Usuário não autenticado');
 
-          const resEst = await fetch(`${API_URL}/estatisticas`);
-          const estatisticas = await resEst.json();
-
           const resVeiculos = await fetch(`${API_URL}/veiculos/${uid}`);
           const veiculos = await resVeiculos.json();
-
           const veiculo = veiculos[0]?.veiculo;
           const condutor = veiculos[0]?.condutor;
 
@@ -56,8 +52,17 @@ export default function DadosComunitariosScreen() {
             return;
           }
 
+          const userAvg = veiculos[0]?.avgEfficiency || {};
+          setUserEff({
+            gasolina: userAvg.gasolina || 0,
+            alcool: userAvg.alcool || 0,
+          });
+
           const { marca, modelo } = veiculo;
           const { cidade } = condutor;
+
+          const resEst = await fetch(`${API_URL}/estatisticas`);
+          const estatisticas = await resEst.json();
 
           const statsMesmoModelo = estatisticas.filter((s: any) =>
             s.marca.toLowerCase() === marca.toLowerCase() &&
@@ -67,8 +72,8 @@ export default function DadosComunitariosScreen() {
           const local = statsMesmoModelo.filter((s: any) => s.cidade?.toLowerCase() === cidade.toLowerCase());
 
           if (local.length > 0) {
-            const sumGas = local.reduce((sum: number, s: any) => sum + s.gasolina, 0);
-            const sumAlc = local.reduce((sum: number, s: any) => sum + s.alcool, 0);
+            const sumGas = local.reduce((sum: number, s: any) => sum + s.avgEfficiency.gasolina, 0);
+            const sumAlc = local.reduce((sum: number, s: any) => sum + s.avgEfficiency.alcool, 0);
             setLocalStat({ marca, modelo, cidade, count: local.length, avgEfficiency: {
               gasolina: sumGas / local.length,
               alcool: sumAlc / local.length,
@@ -78,8 +83,8 @@ export default function DadosComunitariosScreen() {
           }
 
           if (statsMesmoModelo.length > 0) {
-            const sumGas = statsMesmoModelo.reduce((sum: number, s: any) => sum + s.gasolina, 0);
-            const sumAlc = statsMesmoModelo.reduce((sum: number, s: any) => sum + s.alcool, 0);
+            const sumGas = statsMesmoModelo.reduce((sum: number, s: any) => sum + s.avgEfficiency.gasolina, 0);
+            const sumAlc = statsMesmoModelo.reduce((sum: number, s: any) => sum + s.avgEfficiency.alcool, 0);
             setGlobalStat({ marca, modelo, count: statsMesmoModelo.length, avgEfficiency: {
               gasolina: sumGas / statsMesmoModelo.length,
               alcool: sumAlc / statsMesmoModelo.length,
