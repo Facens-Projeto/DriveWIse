@@ -115,6 +115,85 @@ app.patch('/quilometragem/:uid', async (req, res) => {
   }
 });
 
+// ✅ Nova rota para cálculo de estatísticas comunitárias
+app.get('/estatisticas', async (req, res) => {
+  try {
+    await client.connect();
+
+    const veiculos = await client.db(dbName).collection(veiculosCollection).find({}).toArray();
+    const abastecimentos = await client.db(dbName).collection(abastecimentosCollection).find({}).toArray();
+
+    const modelosMap = {}; // chave: "marca|modelo|cidade" => lista de abastecimentos
+
+    // 🔁 Adiciona abastecimentos antigos (do campo abastecimentos dentro de veiculos)
+    for (const doc of veiculos) {
+      const { veiculo, condutor, uid } = doc;
+      const abasts = doc.abastecimentos || [];
+
+      for (const a of abasts) {
+        const chave = `${veiculo.marca}|${veiculo.modelo}|${condutor?.cidade || 'Desconhecida'}`;
+        if (!modelosMap[chave]) modelosMap[chave] = [];
+        modelosMap[chave].push({ ...a, uid });
+      }
+    }
+
+    // 🔁 Adiciona abastecimentos novos (coleção separada)
+    for (const a of abastecimentos) {
+      const veiculo = veiculos.find(v => v.uid === a.uid);
+      if (!veiculo) continue;
+      const chave = `${veiculo.veiculo.marca}|${veiculo.veiculo.modelo}|${veiculo.condutor?.cidade || 'Desconhecida'}`;
+      if (!modelosMap[chave]) modelosMap[chave] = [];
+      modelosMap[chave].push(a);
+    }
+
+    const resultado = [];
+
+    for (const chave in modelosMap) {
+      const [marca, modelo, cidade] = chave.split('|');
+      const lista = modelosMap[chave]
+        .filter((a) => a.km && a.litros > 0)
+        .sort((a, b) => a.km - b.km);
+
+      const rendimentos = { gasolina: [], alcool: [] };
+
+      for (let i = 1; i < lista.length; i++) {
+        const atual = lista[i];
+        const anterior = lista[i - 1];
+
+        const tipo = atual.tipo?.toLowerCase();
+        if (!['gasolina', 'álcool', 'alcool'].includes(tipo)) continue;
+        const tipoKey = tipo === 'álcool' ? 'alcool' : tipo;
+
+        const trajeto = atual.km - anterior.km;
+        if (trajeto > 0 && anterior.litros > 0) {
+          const rendimento = trajeto / anterior.litros;
+          rendimentos[tipoKey].push(rendimento);
+        }
+      }
+
+      const mediaGas = rendimentos.gasolina.length > 0 ? (rendimentos.gasolina.reduce((a, b) => a + b, 0) / rendimentos.gasolina.length) : 0;
+      const mediaAlc = rendimentos.alcool.length > 0 ? (rendimentos.alcool.reduce((a, b) => a + b, 0) / rendimentos.alcool.length) : 0;
+
+      resultado.push({
+        marca,
+        modelo,
+        cidade,
+        count: lista.length,
+        avgEfficiency: {
+          gasolina: parseFloat(mediaGas.toFixed(2)),
+          alcool: parseFloat(mediaAlc.toFixed(2)),
+        },
+      });
+    }
+
+    res.json(resultado);
+  } catch (err) {
+    console.error('Erro ao gerar estatísticas:', err);
+    res.status(500).json({ erro: 'Erro ao gerar estatísticas' });
+  }
+});
+
+
 const PORT = process.env.PORT || 8080;
 
 app.listen(PORT, () => {

@@ -1,4 +1,3 @@
-// src/screens/DadosComunitariosScreen.tsx — adaptado para funcionamento online com abastecimentos separados
 import React, { useState, useCallback } from 'react';
 import {
   View,
@@ -12,10 +11,10 @@ import {
   StatusBar,
   Alert,
 } from 'react-native';
-import { buscarTodosVeiculos, buscarAbastecimentosDoUsuario, buscarAbastecimentosGlobais } from '../services/veiculosService';
 import { useFocusEffect } from '@react-navigation/native';
 import { getUserId } from '../services/firebase';
-import { buscarVeiculosDoUsuario } from '../services/veiculosService';
+
+const API_URL = 'https://drivewise-production.up.railway.app';
 
 interface CommunityStat {
   marca: string;
@@ -42,9 +41,14 @@ export default function DadosComunitariosScreen() {
           const uid = await getUserId();
           if (!uid) throw new Error('Usuário não autenticado');
 
-          const dados = await buscarVeiculosDoUsuario(uid);
-          const veiculo = dados[0]?.veiculo;
-          const condutor = dados[0]?.condutor;
+          const resEst = await fetch(`${API_URL}/estatisticas`);
+          const estatisticas = await resEst.json();
+
+          const resVeiculos = await fetch(`${API_URL}/veiculos/${uid}`);
+          const veiculos = await resVeiculos.json();
+
+          const veiculo = veiculos[0]?.veiculo;
+          const condutor = veiculos[0]?.condutor;
 
           if (!veiculo || !condutor) {
             Alert.alert('Perfil não encontrado', 'Por favor, cadastre seu veículo primeiro.');
@@ -55,68 +59,35 @@ export default function DadosComunitariosScreen() {
           const { marca, modelo } = veiculo;
           const { cidade } = condutor;
 
-          const abastecimentosUsuario = await buscarAbastecimentosDoUsuario(uid);
+          const statsMesmoModelo = estatisticas.filter((s: any) =>
+            s.marca.toLowerCase() === marca.toLowerCase() &&
+            s.modelo.toLowerCase() === modelo.toLowerCase()
+          );
 
-          const ultimos = abastecimentosUsuario
-            .filter((a: any) => a.km && a.litros)
-            .sort((a: any, b: any) => b.km - a.km);
+          const local = statsMesmoModelo.filter((s: any) => s.cidade?.toLowerCase() === cidade.toLowerCase());
 
-          if (ultimos.length >= 2) {
-            const trajeto = ultimos[0].km - ultimos[1].km;
-            const rendimento = trajeto / ultimos[1].litros;
-            setUserEff({ gasolina: rendimento, alcool: rendimento });
+          if (local.length > 0) {
+            const sumGas = local.reduce((sum: number, s: any) => sum + s.gasolina, 0);
+            const sumAlc = local.reduce((sum: number, s: any) => sum + s.alcool, 0);
+            setLocalStat({ marca, modelo, cidade, count: local.length, avgEfficiency: {
+              gasolina: sumGas / local.length,
+              alcool: sumAlc / local.length,
+            }});
+          } else {
+            setLocalStat(null);
           }
 
-          const todosVeiculos = await buscarTodosVeiculos();
-          const abastecimentosGlobais = await buscarAbastecimentosGlobais();
+          if (statsMesmoModelo.length > 0) {
+            const sumGas = statsMesmoModelo.reduce((sum: number, s: any) => sum + s.gasolina, 0);
+            const sumAlc = statsMesmoModelo.reduce((sum: number, s: any) => sum + s.alcool, 0);
+            setGlobalStat({ marca, modelo, count: statsMesmoModelo.length, avgEfficiency: {
+              gasolina: sumGas / statsMesmoModelo.length,
+              alcool: sumAlc / statsMesmoModelo.length,
+            }});
+          } else {
+            setGlobalStat(null);
+          }
 
-          const doMesmoModelo = todosVeiculos.filter((v: any) =>
-            v.veiculo.marca?.toLowerCase() === marca.toLowerCase() &&
-            v.veiculo.modelo?.toLowerCase() === modelo.toLowerCase()
-          );
-
-          const uidsModelo = doMesmoModelo.map((v: any) => v.uid);
-
-          const abastecsMesmoModelo = abastecimentosGlobais.filter((a: any) =>
-            uidsModelo.includes(a.uid)
-          );
-
-          const abastecsLocais = abastecsMesmoModelo.filter((a: any) =>
-            todosVeiculos.find((v: any) => v.uid === a.uid && v.condutor.cidade?.toLowerCase() === cidade.toLowerCase())
-          );
-
-          const calcularMedia = (lista: any[], tipo: string) => {
-            const filtrados = lista.filter((a) => a.tipo === tipo && a.km && a.litros)
-              .sort((a, b) => b.km - a.km);
-            const rendimentos = [];
-            for (let i = 1; i < filtrados.length; i++) {
-              const trajeto = filtrados[i - 1].km - filtrados[i].km;
-              const rendimento = trajeto / filtrados[i].litros;
-              if (isFinite(rendimento)) rendimentos.push(rendimento);
-            }
-            return rendimentos.length ? (rendimentos.reduce((a, b) => a + b, 0) / rendimentos.length) : 0;
-          };
-
-          setLocalStat({
-            marca,
-            modelo,
-            cidade,
-            count: abastecsLocais.length,
-            avgEfficiency: {
-              gasolina: calcularMedia(abastecsLocais, 'Gasolina'),
-              alcool: calcularMedia(abastecsLocais, 'Álcool'),
-            },
-          });
-
-          setGlobalStat({
-            marca,
-            modelo,
-            count: abastecsMesmoModelo.length,
-            avgEfficiency: {
-              gasolina: calcularMedia(abastecsMesmoModelo, 'Gasolina'),
-              alcool: calcularMedia(abastecsMesmoModelo, 'Álcool'),
-            },
-          });
         } catch (e) {
           console.error('❌ Erro ao carregar dados comunitários:', e);
           Alert.alert('Erro', 'Não foi possível carregar os dados comunitários.');
