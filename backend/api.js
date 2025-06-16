@@ -14,6 +14,21 @@ const dbName = 'drivewise';
 const veiculosCollection = 'veiculos';
 const abastecimentosCollection = 'abastecimentos';
 
+// GET despesas por UID
+app.get('/despesas/:uid', async (req, res) => {
+  const uid = req.params.uid;
+  const despesas = await client.db(dbName).collection('despesas').find({ uid }).toArray();
+  res.json(despesas);
+});
+
+// POST nova despesa
+app.post('/despesas', async (req, res) => {
+  const { uid, ...dados } = req.body;
+  await client.db(dbName).collection('despesas').insertOne({ uid, ...dados });
+  res.status(201).json({ sucesso: true });
+});
+
+
 // ✅ Rota para verificar se a API está online
 app.get('/', (req, res) => {
   res.send('API DriveWise está online 🚀');
