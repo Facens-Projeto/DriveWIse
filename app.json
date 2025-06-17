@@ -16,8 +16,7 @@
       "supportsTablet": true
     },
     "android": {
-      "package": "com.seunome.driveWise",
-      "versionCode": 1,
+      "package": "com.heloisag.driveWise",
       "adaptiveIcon": {
         "foregroundImage": "./src/assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
