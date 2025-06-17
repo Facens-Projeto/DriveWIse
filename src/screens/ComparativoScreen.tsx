@@ -12,6 +12,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { buscarTodosVeiculos } from '../services/veiculosService';
 import { obterRecomendacoesAPI } from '../services/recomendacoesService';
 
@@ -91,22 +92,30 @@ export default function ComparativoScreen() {
   }, [filters, data]);
 
   function computeStatsForFilter(f: VehicleFilter): StatsResult {
-    const lvl0 = data.filter(e => e.veiculo.marca === f.marca && e.veiculo.modelo === f.modelo);
-    const lvl1 = lvl0.filter(e => e.veiculo.ano === f.ano);
-    const lvl2 = lvl1.filter(e => e.veiculo.quilometragem >= f.kmMin && e.veiculo.quilometragem <= f.kmMax);
+    const nivel0 = data.filter(e => e.veiculo.marca === f.marca && e.veiculo.modelo === f.modelo);
+    const nivel1 = nivel0.filter(e => e.veiculo.ano === f.ano);
+    const nivel2 = nivel1.filter(e => e.veiculo.quilometragem >= f.kmMin && e.veiculo.quilometragem <= f.kmMax);
 
-    const base = lvl2.length ? lvl2 : lvl1.length ? lvl1 : lvl0;
+    const base = nivel2.length > 0 ? nivel2 : nivel1.length > 0 ? nivel1 : nivel0.length > 0 ? nivel0 : [];
 
-    const sum = base.reduce(
-      (acc, e) => {
-        acc.gasolina += e.avgEfficiency.gasolina;
-        acc.alcool += e.avgEfficiency.alcool;
-        acc.diesel += e.avgEfficiency.diesel;
-        return acc;
-      },
-      { gasolina: 0, alcool: 0, diesel: 0 }
-    );
-    const cnt = base.length || 1;
+    if (base.length === 0) {
+      return {
+        total_make_model: 0,
+        total_year: 0,
+        total_km_range: 0,
+        avg: { gasolina: 0, alcool: 0, diesel: 0 },
+        custoPorKm: 0,
+      };
+    }
+
+    const sum = base.reduce((acc, e) => {
+      acc.gasolina += e.avgEfficiency.gasolina;
+      acc.alcool += e.avgEfficiency.alcool;
+      acc.diesel += e.avgEfficiency.diesel;
+      return acc;
+    }, { gasolina: 0, alcool: 0, diesel: 0 });
+
+    const cnt = base.length;
     const avg = {
       gasolina: sum.gasolina / cnt,
       alcool: sum.alcool / cnt,
@@ -116,9 +125,9 @@ export default function ComparativoScreen() {
     const custo = ((avg.gasolina ? 5 / avg.gasolina : 0) + (avg.alcool ? 4 / avg.alcool : 0) + (avg.diesel ? 4.5 / avg.diesel : 0)) / 3;
 
     return {
-      total_make_model: lvl0.length,
-      total_year: lvl1.length,
-      total_km_range: lvl2.length,
+      total_make_model: nivel0.length,
+      total_year: nivel1.length,
+      total_km_range: nivel2.length,
       avg,
       custoPorKm: custo,
     };
@@ -132,10 +141,8 @@ export default function ComparativoScreen() {
     const range = KM_RANGES.find(r => r.label === kmRange);
     if (!range) return;
     const id = `${marca}_${modelo}_${ano}_${range.label}`;
-
     try {
       const { recomendacoes } = await obterRecomendacoesAPI({ quilometragem: range.max, tecnologia, uso });
-
       const f: VehicleFilter = {
         id,
         marca,
@@ -149,76 +156,80 @@ export default function ComparativoScreen() {
         recomendacoes,
       };
       setFilters(prev => [...prev, f]);
+      setMarca('');
+      setModelo('');
+      setAno('');
+      setCombSelecionados([]);
+      setTecnologia('Combustao');
+      setUso('Urbano');
       setModalVisible(false);
     } catch (error) {
       Alert.alert('Erro', 'Falha ao obter recomendações');
     }
   }
 
+  function removerFiltro(id: string) {
+    setFilters(prev => prev.filter(f => f.id !== id));
+  }
+  
   return (
     <SafeAreaView style={styles.container}>
       <TouchableOpacity style={styles.btnAdd} onPress={() => setModalVisible(true)}>
-        <Text style={styles.btnText}>➕ Adicionar Veículo</Text>
+        <Text style={styles.btnText}>+ Adicionar Veículo</Text>
       </TouchableOpacity>
 
-      <ScrollView style={styles.table}>
-        <View style={styles.rowHeader}>
-          <Text style={[styles.cell, styles.header]}>Veículo</Text>
-          <Text style={[styles.cell, styles.header]}>Gasolina</Text>
-          <Text style={[styles.cell, styles.header]}>Álcool</Text>
-          <Text style={[styles.cell, styles.header]}>Diesel</Text>
-          <Text style={[styles.cell, styles.header]}>Custo/km</Text>
-        </View>
+      <ScrollView>
         {filters.map(f => {
           const s = stats[f.id];
-          const allGas = Object.values(stats).map(r => r.avg.gasolina);
-          const bestGas = Math.max(...allGas);
-          const worstGas = Math.min(...allGas);
-          const allAlc = Object.values(stats).map(r => r.avg.alcool);
-          const bestAlc = Math.max(...allAlc);
-          const worstAlc = Math.min(...allAlc);
-          const allDiesel = Object.values(stats).map(r => r.avg.diesel);
-          const bestDiesel = Math.max(...allDiesel);
-          const worstDiesel = Math.min(...allDiesel);
-          const allCusto = Object.values(stats).map(r => r.custoPorKm);
-          const bestC = Math.min(...allCusto);
-          const worstC = Math.max(...allCusto);
+          if (!s) return null;
+
+          const custoValues = Object.values(stats).map(v => v.custoPorKm);
+          const melhorCusto = Math.min(...custoValues);
+          const piorCusto = Math.max(...custoValues);
+
+          const destaqueStyle = s.custoPorKm === melhorCusto
+            ? { borderColor: '#4caf50', borderWidth: 2 }
+            : s.custoPorKm === piorCusto
+            ? { borderColor: '#f44336', borderWidth: 2 }
+            : {};
 
           return (
-            <View key={f.id}>
-              <View style={styles.row}>
-                <Text style={styles.cell}>{`${f.marca} ${f.modelo} ${f.ano}`}</Text>
-                <Text style={[styles.cell, s.avg.gasolina === bestGas ? styles.best : s.avg.gasolina === worstGas ? styles.worst : {}]}>{s.avg.gasolina.toFixed(1)}</Text>
-                <Text style={[styles.cell, s.avg.alcool === bestAlc ? styles.best : s.avg.alcool === worstAlc ? styles.worst : {}]}>{s.avg.alcool.toFixed(1)}</Text>
-                <Text style={[styles.cell, s.avg.diesel === bestDiesel ? styles.best : s.avg.diesel === worstDiesel ? styles.worst : {}]}>{s.avg.diesel.toFixed(1)}</Text>
-                <Text style={[styles.cell, s.custoPorKm === bestC ? styles.best : s.custoPorKm === worstC ? styles.worst : {}]}>R$ {s.custoPorKm.toFixed(2)}</Text>
-              </View>
-
-              {f.recomendacoes && (
-                <View style={{ marginBottom: 10, marginTop: 6, marginLeft: 10 }}>
-                  <Text style={{ color: '#ccc', fontSize: 12, fontWeight: 'bold' }}>Recomendações técnicas:</Text>
+            <View key={f.id} style={[styles.card, destaqueStyle]}>
+              <Text style={styles.vehicleName}>{`${f.marca} ${f.modelo} ${f.ano}`}</Text>
+              <Text style={styles.cell}>Gasolina: {isNaN(s.avg.gasolina) ? '-' : s.avg.gasolina.toFixed(1)}</Text>
+              <Text style={styles.cell}>Álcool: {isNaN(s.avg.alcool) ? '-' : s.avg.alcool.toFixed(1)}</Text>
+              <Text style={styles.cell}>Diesel: {isNaN(s.avg.diesel) ? '-' : s.avg.diesel.toFixed(1)}</Text>
+              <Text style={styles.cell}>
+                Custo/km: R$ {s.custoPorKm.toFixed(2)}{' '}
+                {s.custoPorKm === melhorCusto ? '⭐' : ''}
+              </Text>
+              {Array.isArray(f.recomendacoes) && f.recomendacoes.length > 0 && (
+                <View style={styles.recomendacoesBox}>
+                  <Text style={styles.recomendacoesTitulo}>Recomendações técnicas:</Text>
                   {f.recomendacoes.map((r, i) => (
-                    <Text key={i} style={{ color: '#7e54f6', fontSize: 12, marginLeft: 10 }}>• {r}</Text>
+                    <Text key={i} style={styles.recomendacaoItem}>🔧 {r}</Text>
                   ))}
                 </View>
               )}
+              <TouchableOpacity onPress={() => removerFiltro(f.id)} style={styles.removeButton}>
+                <Ionicons name="trash-outline" size={16} color="#f66" />
+                <Text style={styles.removeText}>Remover</Text>
+              </TouchableOpacity>
             </View>
           );
         })}
       </ScrollView>
 
-      {/* Modal com Scroll e Teclado adaptado */}
-      <Modal visible={modalVisible} transparent animationType="slide">
+      <Modal visible={modalVisible} animationType="slide" transparent>
         <KeyboardAvoidingView
           style={styles.overlay}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          keyboardVerticalOffset={60}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
-          <ScrollView contentContainerStyle={styles.modal} keyboardShouldPersistTaps="handled">
+          <ScrollView contentContainerStyle={styles.modal}>
             <Text style={styles.modalTitle}>Novo Veículo</Text>
-            <TextInput style={styles.input} placeholder="Marca" placeholderTextColor="#999" value={marca} onChangeText={setMarca} />
-            <TextInput style={styles.input} placeholder="Modelo" placeholderTextColor="#999" value={modelo} onChangeText={setModelo} />
-            <TextInput style={styles.input} placeholder="Ano" keyboardType="numeric" placeholderTextColor="#999" value={ano} onChangeText={setAno} />
+            <TextInput placeholder="Marca" placeholderTextColor="#999" style={styles.input} value={marca} onChangeText={setMarca} />
+            <TextInput placeholder="Modelo" placeholderTextColor="#999" style={styles.input} value={modelo} onChangeText={setModelo} />
+            <TextInput placeholder="Ano" placeholderTextColor="#999" keyboardType="numeric" style={styles.input} value={ano} onChangeText={setAno} />
 
             <Text style={styles.label}>Faixa de quilometragem</Text>
             <View style={styles.pickerGroup}>
@@ -275,14 +286,15 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#121212', padding: 20 },
   btnAdd: { backgroundColor: '#7e54f6', padding: 12, borderRadius: 8, marginBottom: 10 },
   btnText: { color: '#fff', textAlign: 'center', fontWeight: 'bold' },
-  table: { flex: 1 },
-  rowHeader: { flexDirection: 'row', marginBottom: 8 },
-  row: { flexDirection: 'row', marginBottom: 6 },
-  cell: { flex: 1, color: '#fff', textAlign: 'center' },
-  header: { color: '#7e54f6', fontWeight: 'bold' },
-  best: { backgroundColor: '#2e7d32' },
-  worst: { backgroundColor: '#c62828' },
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center' },
+  card: { backgroundColor: '#222', borderRadius: 10, padding: 16, marginBottom: 12 },
+  vehicleName: { fontWeight: 'bold', fontSize: 16, color: '#fff', marginBottom: 4 },
+  cell: { color: '#fff', fontSize: 14 },
+  recomendacoesBox: { marginTop: 10 },
+  recomendacoesTitulo: { color: '#ccc', fontSize: 12, fontWeight: 'bold' },
+  recomendacaoItem: { color: '#7e54f6', fontSize: 12, marginLeft: 10 },
+  removeButton: { flexDirection: 'row', alignItems: 'center', marginTop: 8 },
+  removeText: { color: '#f66', marginLeft: 4 },
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'center' },
   modal: { backgroundColor: '#1e1e1e', margin: 20, padding: 20, borderRadius: 12 },
   modalTitle: { color: '#fff', fontSize: 18, fontWeight: 'bold', marginBottom: 12 },
   input: { backgroundColor: '#333', color: '#fff', padding: 10, borderRadius: 6, marginBottom: 10 },
