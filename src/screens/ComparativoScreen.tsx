@@ -1,4 +1,3 @@
-// ComparativoScreen.tsx
 import React, { useState, useEffect } from 'react';
 import {
   SafeAreaView,
@@ -10,6 +9,8 @@ import {
   StyleSheet,
   ScrollView,
   Alert,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { buscarTodosVeiculos } from '../services/veiculosService';
 import { obterRecomendacoesAPI } from '../services/recomendacoesService';
@@ -66,8 +67,8 @@ export default function ComparativoScreen() {
   const [ano, setAno] = useState('');
   const [kmRange, setKmRange] = useState(KM_RANGES[0].label);
   const [combSelecionados, setCombSelecionados] = useState<string[]>([]);
-  const [tecnologia, setTecnologia] = useState('combustao');
-  const [uso, setUso] = useState('urbano');
+  const [tecnologia, setTecnologia] = useState('Combustao');
+  const [uso, setUso] = useState('Urbano');
 
   useEffect(() => {
     (async () => {
@@ -184,25 +185,36 @@ export default function ComparativoScreen() {
           const worstC = Math.max(...allCusto);
 
           return (
-            <View key={f.id} style={styles.row}>
-              <Text style={styles.cell}>{`${f.marca} ${f.modelo} ${f.ano}`}</Text>
-              <Text style={[styles.cell, s.avg.gasolina === bestGas ? styles.best : s.avg.gasolina === worstGas ? styles.worst : {}]}>{s.avg.gasolina.toFixed(1)}</Text>
-              <Text style={[styles.cell, s.avg.alcool === bestAlc ? styles.best : s.avg.alcool === worstAlc ? styles.worst : {}]}>{s.avg.alcool.toFixed(1)}</Text>
-              <Text style={[styles.cell, s.avg.diesel === bestDiesel ? styles.best : s.avg.diesel === worstDiesel ? styles.worst : {}]}>{s.avg.diesel.toFixed(1)}</Text>
-              <Text style={[styles.cell, s.custoPorKm === bestC ? styles.best : s.custoPorKm === worstC ? styles.worst : {}]}>R$ {s.custoPorKm.toFixed(2)}</Text>
+            <View key={f.id}>
+              <View style={styles.row}>
+                <Text style={styles.cell}>{`${f.marca} ${f.modelo} ${f.ano}`}</Text>
+                <Text style={[styles.cell, s.avg.gasolina === bestGas ? styles.best : s.avg.gasolina === worstGas ? styles.worst : {}]}>{s.avg.gasolina.toFixed(1)}</Text>
+                <Text style={[styles.cell, s.avg.alcool === bestAlc ? styles.best : s.avg.alcool === worstAlc ? styles.worst : {}]}>{s.avg.alcool.toFixed(1)}</Text>
+                <Text style={[styles.cell, s.avg.diesel === bestDiesel ? styles.best : s.avg.diesel === worstDiesel ? styles.worst : {}]}>{s.avg.diesel.toFixed(1)}</Text>
+                <Text style={[styles.cell, s.custoPorKm === bestC ? styles.best : s.custoPorKm === worstC ? styles.worst : {}]}>R$ {s.custoPorKm.toFixed(2)}</Text>
+              </View>
+
               {f.recomendacoes && (
-                <Text style={{ color: '#ccc', fontSize: 12, marginTop: 4, textAlign: 'center' }}>
-                  {f.recomendacoes.map((r, i) => `• ${r}`).join('\n')}
-                </Text>
+                <View style={{ marginBottom: 10, marginTop: 6, marginLeft: 10 }}>
+                  <Text style={{ color: '#ccc', fontSize: 12, fontWeight: 'bold' }}>Recomendações técnicas:</Text>
+                  {f.recomendacoes.map((r, i) => (
+                    <Text key={i} style={{ color: '#7e54f6', fontSize: 12, marginLeft: 10 }}>• {r}</Text>
+                  ))}
+                </View>
               )}
             </View>
           );
         })}
       </ScrollView>
 
+      {/* Modal com Scroll e Teclado adaptado */}
       <Modal visible={modalVisible} transparent animationType="slide">
-        <View style={styles.overlay}>
-          <View style={styles.modal}>
+        <KeyboardAvoidingView
+          style={styles.overlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={60}
+        >
+          <ScrollView contentContainerStyle={styles.modal} keyboardShouldPersistTaps="handled">
             <Text style={styles.modalTitle}>Novo Veículo</Text>
             <TextInput style={styles.input} placeholder="Marca" placeholderTextColor="#999" value={marca} onChangeText={setMarca} />
             <TextInput style={styles.input} placeholder="Modelo" placeholderTextColor="#999" value={modelo} onChangeText={setModelo} />
@@ -230,7 +242,7 @@ export default function ComparativoScreen() {
 
             <Text style={styles.label}>Tecnologia</Text>
             <View style={styles.pickerGroup}>
-              {['combustao', 'hibrido'].map(t => (
+              {['Combustao', 'Hibrido'].map(t => (
                 <TouchableOpacity key={t} style={[styles.pickerOption, tecnologia === t && styles.pickerSelected]} onPress={() => setTecnologia(t)}>
                   <Text style={styles.pickerText}>{t}</Text>
                 </TouchableOpacity>
@@ -239,7 +251,7 @@ export default function ComparativoScreen() {
 
             <Text style={styles.label}>Perfil de uso</Text>
             <View style={styles.pickerGroup}>
-              {['urbano', 'rodoviario'].map(u => (
+              {['Urbano', 'Rodoviario'].map(u => (
                 <TouchableOpacity key={u} style={[styles.pickerOption, uso === u && styles.pickerSelected]} onPress={() => setUso(u)}>
                   <Text style={styles.pickerText}>{u}</Text>
                 </TouchableOpacity>
@@ -252,8 +264,8 @@ export default function ComparativoScreen() {
             <TouchableOpacity style={styles.btnCancel} onPress={() => setModalVisible(false)}>
               <Text style={styles.btnText}>Cancelar</Text>
             </TouchableOpacity>
-          </View>
-        </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
   );
