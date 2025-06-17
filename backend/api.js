@@ -262,3 +262,28 @@ const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
   console.log(`🚀 Servidor backend rodando na porta ${PORT}`);
 });
+
+app.post('/recomendacoes', async (req, res) => {
+  const { quilometragem, tecnologia, uso } = req.body;
+
+  if (typeof quilometragem !== 'number' || !tecnologia || !uso) {
+    return res.status(400).json({ erro: 'Parâmetros inválidos' });
+  }
+
+  const recomendacoes = [];
+
+  if (quilometragem <= 15000) {
+    recomendacoes.push('Troca de óleo');
+    if (tecnologia === 'hibrido') recomendacoes.push('Verificação da bateria híbrida');
+  } else if (quilometragem <= 30000) {
+    recomendacoes.push('Troca de óleo e filtro');
+    recomendacoes.push('Alinhamento e balanceamento');
+    if (tecnologia === 'hibrido') recomendacoes.push('Atualização de firmware do sistema híbrido');
+  } else {
+    recomendacoes.push('Revisão completa');
+    recomendacoes.push('Verificação dos freios');
+    recomendacoes.push('Verificação da suspensão');
+  }
+
+  res.json({ recomendacoes });
+});

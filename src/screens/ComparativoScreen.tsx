@@ -1,3 +1,4 @@
+// ComparativoScreen.tsx
 import React, { useState, useEffect } from 'react';
 import {
   SafeAreaView,
@@ -11,6 +12,7 @@ import {
   Alert,
 } from 'react-native';
 import { buscarTodosVeiculos } from '../services/veiculosService';
+import { obterRecomendacoesAPI } from '../services/recomendacoesService';
 
 interface RawEntry {
   veiculo: {
@@ -33,6 +35,9 @@ interface VehicleFilter {
   kmMin: number;
   kmMax: number;
   combustiveisAceitos: string[];
+  tecnologia?: string;
+  uso?: string;
+  recomendacoes?: string[];
 }
 
 interface StatsResult {
@@ -61,6 +66,8 @@ export default function ComparativoScreen() {
   const [ano, setAno] = useState('');
   const [kmRange, setKmRange] = useState(KM_RANGES[0].label);
   const [combSelecionados, setCombSelecionados] = useState<string[]>([]);
+  const [tecnologia, setTecnologia] = useState('combustao');
+  const [uso, setUso] = useState('urbano');
 
   useEffect(() => {
     (async () => {
@@ -83,13 +90,9 @@ export default function ComparativoScreen() {
   }, [filters, data]);
 
   function computeStatsForFilter(f: VehicleFilter): StatsResult {
-    const lvl0 = data.filter(e =>
-      e.veiculo.marca === f.marca && e.veiculo.modelo === f.modelo
-    );
+    const lvl0 = data.filter(e => e.veiculo.marca === f.marca && e.veiculo.modelo === f.modelo);
     const lvl1 = lvl0.filter(e => e.veiculo.ano === f.ano);
-    const lvl2 = lvl1.filter(
-      e => e.veiculo.quilometragem >= f.kmMin && e.veiculo.quilometragem <= f.kmMax
-    );
+    const lvl2 = lvl1.filter(e => e.veiculo.quilometragem >= f.kmMin && e.veiculo.quilometragem <= f.kmMax);
 
     const base = lvl2.length ? lvl2 : lvl1.length ? lvl1 : lvl0;
 
@@ -128,17 +131,27 @@ export default function ComparativoScreen() {
     const range = KM_RANGES.find(r => r.label === kmRange);
     if (!range) return;
     const id = `${marca}_${modelo}_${ano}_${range.label}`;
-    const f: VehicleFilter = {
-      id,
-      marca,
-      modelo,
-      ano: parseInt(ano, 10),
-      kmMin: range.min,
-      kmMax: range.max,
-      combustiveisAceitos: combSelecionados,
-    };
-    setFilters(prev => [...prev, f]);
-    setModalVisible(false);
+
+    try {
+      const { recomendacoes } = await obterRecomendacoesAPI({ quilometragem: range.max, tecnologia, uso });
+
+      const f: VehicleFilter = {
+        id,
+        marca,
+        modelo,
+        ano: parseInt(ano, 10),
+        kmMin: range.min,
+        kmMax: range.max,
+        combustiveisAceitos: combSelecionados,
+        tecnologia,
+        uso,
+        recomendacoes,
+      };
+      setFilters(prev => [...prev, f]);
+      setModalVisible(false);
+    } catch (error) {
+      Alert.alert('Erro', 'Falha ao obter recomendações');
+    }
   }
 
   return (
@@ -177,6 +190,11 @@ export default function ComparativoScreen() {
               <Text style={[styles.cell, s.avg.alcool === bestAlc ? styles.best : s.avg.alcool === worstAlc ? styles.worst : {}]}>{s.avg.alcool.toFixed(1)}</Text>
               <Text style={[styles.cell, s.avg.diesel === bestDiesel ? styles.best : s.avg.diesel === worstDiesel ? styles.worst : {}]}>{s.avg.diesel.toFixed(1)}</Text>
               <Text style={[styles.cell, s.custoPorKm === bestC ? styles.best : s.custoPorKm === worstC ? styles.worst : {}]}>R$ {s.custoPorKm.toFixed(2)}</Text>
+              {f.recomendacoes && (
+                <Text style={{ color: '#ccc', fontSize: 12, marginTop: 4, textAlign: 'center' }}>
+                  {f.recomendacoes.map((r, i) => `• ${r}`).join('\n')}
+                </Text>
+              )}
             </View>
           );
         })}
@@ -189,32 +207,45 @@ export default function ComparativoScreen() {
             <TextInput style={styles.input} placeholder="Marca" placeholderTextColor="#999" value={marca} onChangeText={setMarca} />
             <TextInput style={styles.input} placeholder="Modelo" placeholderTextColor="#999" value={modelo} onChangeText={setModelo} />
             <TextInput style={styles.input} placeholder="Ano" keyboardType="numeric" placeholderTextColor="#999" value={ano} onChangeText={setAno} />
+
             <Text style={styles.label}>Faixa de quilometragem</Text>
             <View style={styles.pickerGroup}>
               {KM_RANGES.map(r => (
-                <TouchableOpacity
-                  key={r.label}
-                  style={[styles.pickerOption, kmRange === r.label && styles.pickerSelected]}
-                  onPress={() => setKmRange(r.label)}
-                >
+                <TouchableOpacity key={r.label} style={[styles.pickerOption, kmRange === r.label && styles.pickerSelected]} onPress={() => setKmRange(r.label)}>
                   <Text style={styles.pickerText}>{r.label}</Text>
                 </TouchableOpacity>
               ))}
             </View>
+
             <Text style={styles.label}>Combustíveis aceitos</Text>
             <View style={styles.pickerGroup}>
               {COMB_OPTIONS.map(c => (
-                <TouchableOpacity
-                  key={c}
-                  style={[styles.pickerOption, combSelecionados.includes(c) && styles.pickerSelected]}
-                  onPress={() => {
-                    setCombSelecionados(prev => prev.includes(c) ? prev.filter(x => x !== c) : [...prev, c]);
-                  }}
-                >
+                <TouchableOpacity key={c} style={[styles.pickerOption, combSelecionados.includes(c) && styles.pickerSelected]} onPress={() => {
+                  setCombSelecionados(prev => prev.includes(c) ? prev.filter(x => x !== c) : [...prev, c]);
+                }}>
                   <Text style={styles.pickerText}>{c}</Text>
                 </TouchableOpacity>
               ))}
             </View>
+
+            <Text style={styles.label}>Tecnologia</Text>
+            <View style={styles.pickerGroup}>
+              {['combustao', 'hibrido'].map(t => (
+                <TouchableOpacity key={t} style={[styles.pickerOption, tecnologia === t && styles.pickerSelected]} onPress={() => setTecnologia(t)}>
+                  <Text style={styles.pickerText}>{t}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text style={styles.label}>Perfil de uso</Text>
+            <View style={styles.pickerGroup}>
+              {['urbano', 'rodoviario'].map(u => (
+                <TouchableOpacity key={u} style={[styles.pickerOption, uso === u && styles.pickerSelected]} onPress={() => setUso(u)}>
+                  <Text style={styles.pickerText}>{u}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
             <TouchableOpacity style={styles.btnSave} onPress={addFilter}>
               <Text style={styles.btnText}>Salvar</Text>
             </TouchableOpacity>
